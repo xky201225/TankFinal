@@ -208,4 +208,67 @@
   <data name="blackSquare" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\Ui\blackSquare.jpg;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="back" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Ui\back.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="jiazai" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Ui\jiazai.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="war" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Ui\war.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Cao" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Terrain\Cao.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Qiang" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Terrain\Qiang.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Shui" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Terrain\Shui.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Tie" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Terrain\Tie.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="PaoDan" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Projectiles\PaoDan.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Ji1" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Ji1.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Ji2" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Ji2.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Ji3" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Ji3.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Bao1" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Bao1.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Bao2" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Bao2.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Bao3" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Bao3.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Bao4" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Bao4.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Bao5" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Effects\Bao5.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Lv" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Tanks\Lv.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Huang" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Tanks\Huang.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Lan" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Tanks\Lan.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Hong" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Tanks\Hong.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="Zi" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Tanks\Zi.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
 </root>

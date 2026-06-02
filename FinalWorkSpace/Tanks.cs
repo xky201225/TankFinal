@@ -36,12 +36,25 @@ namespace Peace_of_Tanks
 
     public class BaseTank
     {
+        protected const double MoveSpeed = 1.5;
         protected Bitmap pictureTank, pictureTank1, pictureTank2;
         protected bool changePicture;
         public Bitmap pictureBullet;
         public int hitpoints = 1;
-        public int x, y;
+        public int maxHitpoints = 1;  // 最大生命值
+        public int attack = 10;        // 攻击力
+        protected double preciseX, preciseY;
         public int direction; //0 - left, 1 - right, 2 - up, 3 - down
+        public int x
+        {
+            get { return (int)Math.Round(preciseX); }
+            set { preciseX = value; }
+        }
+        public int y
+        {
+            get { return (int)Math.Round(preciseY); }
+            set { preciseY = value; }
+        }
 
         public BaseTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction)
         {
@@ -53,9 +66,18 @@ namespace Peace_of_Tanks
             this.pictureTank2 = pictureTank2;
             pictureTank = pictureTank1;
             changePicture = false;
-            this.x = x;
-            this.y = y;
+            preciseX = x;
+            preciseY = y;
             this.direction = direction;
+        }
+
+        // 带攻击力和生命力的构造函数
+        public BaseTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction, int health, int attack)
+            : this(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
+        {
+            this.maxHitpoints = health;
+            this.hitpoints = health;
+            this.attack = attack;
         }
 
         public void RotatePicture(Bitmap pictureTank, int direct, bool isUp, bool isDown, bool isLeft, bool isRight)
@@ -105,9 +127,15 @@ namespace Peace_of_Tanks
             message = new TankEventArgs();
         }
 
+        public PlayerTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction, int health, int attack)
+            : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction, health, attack)
+        {
+            message = new TankEventArgs();
+        }
+
         public void Move(Form MainWindow, KeyEventArgs e, TankEventArgs message, List<Box> boxes, List<BaseTank> tanks)
         {
-            int difference = 1, speed = 1;
+            int difference = 2;
             if (message.isLeft)
             {
                 RotatePicture(pictureTank1, direction, false, false, true, false);
@@ -135,7 +163,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                x -= speed;
+                preciseX -= MoveSpeed;
 
                 changePictureFun();
             }
@@ -166,7 +194,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                y -= speed;
+                preciseY -= MoveSpeed;
 
                 changePictureFun();
             }
@@ -197,7 +225,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                x += speed;
+                preciseX += MoveSpeed;
 
                 changePictureFun();
             }
@@ -228,7 +256,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                y += speed;
+                preciseY += MoveSpeed;
 
                 changePictureFun();
             }
@@ -245,6 +273,13 @@ namespace Peace_of_Tanks
         public EnemyEventArgs message;
 
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
+        {
+            message = new EnemyEventArgs();
+            goToPlayer = ranNumber.Next(1, 3);
+        }
+
+        public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction, int health, int attack)
+            : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction, health, attack)
         {
             message = new EnemyEventArgs();
             goToPlayer = ranNumber.Next(1, 3);
@@ -410,7 +445,7 @@ namespace Peace_of_Tanks
 
         public void Move(Form MainWindow, List<Box> boxes, List<Bullet> bullets, List<BaseTank> tanks)
         {
-            int difference = 1, speed = 1;
+            int difference = 2;
             int turn = MakeChanceDirect(boxes, MainWindow);
             if (turn == 0)
             {
@@ -432,7 +467,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                x -= speed;
+                preciseX -= MoveSpeed;
 
                 changePictureFun();
             }
@@ -467,7 +502,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                y -= speed;
+                preciseY -= MoveSpeed;
 
                 changePictureFun();
             }
@@ -491,7 +526,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                x += speed;
+                preciseX += MoveSpeed;
 
                 changePictureFun();
             }
@@ -515,7 +550,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                y += speed;
+                preciseY += MoveSpeed;
 
                 changePictureFun();
             }
@@ -525,7 +560,7 @@ namespace Peace_of_Tanks
             }
             if (message.pauseSpace < 0)
             {
-                Bullet bullet = new Bullet(Peace_of_Tanks.Properties.Resources.bulletEnemy, x, y, direction, 0);
+                Bullet bullet = new Bullet(Peace_of_Tanks.Properties.Resources.bulletEnemy, x, y, direction, 0, attack);
                 message.pauseSpace = 50;
                 bullets.Add(bullet);
             }

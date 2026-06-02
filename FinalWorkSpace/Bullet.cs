@@ -1,19 +1,31 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Drawing;
-using System.Windows.Forms;
 
 namespace Peace_of_Tanks
 {
     public class Bullet
     {
-        Bitmap pictureBullet;
-        public int x, y;
+        private const double Speed = 62.5;
+        private readonly Bitmap pictureBullet;
+        private double preciseX;
+        private double preciseY;
+        private readonly int direction;
+
         public int who;
-        int direction; //0 - left, 1 - right, 2 - up, 3 - down
+        public int damage = 1;
+
+        public int x
+        {
+            get { return (int)Math.Round(preciseX); }
+            set { preciseX = value; }
+        }
+
+        public int y
+        {
+            get { return (int)Math.Round(preciseY); }
+            set { preciseY = value; }
+        }
+
         public int Direction
         {
             get { return direction; }
@@ -21,42 +33,54 @@ namespace Peace_of_Tanks
 
         public Bullet(Bitmap picture, int x, int y, int direction, int who)
         {
-            Bitmap bullet = Peace_of_Tanks.Properties.Resources.bullet1;
-            bullet.MakeTransparent(Color.Black);
-            pictureBullet = bullet;
-            this.x = x;
-            this.y = y;
+            if (ResourceManager.Bullet != null && ResourceManager.Bullet.Width > 1)
+            {
+                pictureBullet = new Bitmap(ResourceManager.Bullet);
+            }
+            else
+            {
+                pictureBullet = Peace_of_Tanks.Properties.Resources.bullet1;
+                pictureBullet.MakeTransparent(Color.Black);
+            }
+
+            preciseX = x;
+            preciseY = y;
             this.direction = direction;
             this.who = who;
             ChangePosition();
             RotatePicture(direction);
         }
 
-        void ChangePosition()
+        public Bullet(Bitmap picture, int x, int y, int direction, int who, int damage) : this(picture, x, y, direction, who)
         {
-            if(direction == 0)
+            this.damage = damage;
+        }
+
+        private void ChangePosition()
+        {
+            if (direction == 0)
             {
-                x -= 20;
-                y += 20;
+                preciseX -= 20;
+                preciseY += 20;
             }
-            if(direction == 1)
+            if (direction == 1)
             {
-                x += 60;
-                y += 20;
+                preciseX += 60;
+                preciseY += 20;
             }
-            if(direction == 2)
+            if (direction == 2)
             {
-                x += 20;
-                y -= 20;
+                preciseX += 20;
+                preciseY -= 20;
             }
-            if(direction == 3)
+            if (direction == 3)
             {
-                x += 20;
-                y += 60;
+                preciseX += 20;
+                preciseY += 60;
             }
         }
 
-        protected void RotatePicture(int direct)
+        private void RotatePicture(int direct)
         {
             if (direct == 0) pictureBullet.RotateFlip(RotateFlipType.Rotate90FlipX);
             if (direct == 3) pictureBullet.RotateFlip(RotateFlipType.Rotate180FlipNone);
@@ -67,19 +91,19 @@ namespace Peace_of_Tanks
         {
             if (direction == 0)
             {
-                x -= 10;
+                preciseX -= Speed;
             }
             if (direction == 2)
             {
-                y -= 10;
+                preciseY -= Speed;
             }
             if (direction == 1)
             {
-                x += 10;
+                preciseX += Speed;
             }
             if (direction == 3)
             {
-                y += 10;
+                preciseY += Speed;
             }
         }
 

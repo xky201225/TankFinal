@@ -332,22 +332,22 @@ namespace Peace_of_Tanks
 
         private bool ApplyKeyToInput(Keys key, bool pressed, TankEventArgs input)
         {
-            if (key == Keys.Left)
+            if (key == Keys.Left || key == Keys.A)
             {
                 input.isLeft = pressed;
                 return true;
             }
-            if (key == Keys.Right)
+            if (key == Keys.Right || key == Keys.D)
             {
                 input.isRight = pressed;
                 return true;
             }
-            if (key == Keys.Up)
+            if (key == Keys.Up || key == Keys.W)
             {
                 input.isUp = pressed;
                 return true;
             }
-            if (key == Keys.Down)
+            if (key == Keys.Down || key == Keys.S)
             {
                 input.isDown = pressed;
                 return true;
@@ -362,22 +362,22 @@ namespace Peace_of_Tanks
 
         private bool ApplyKeyToInput(Keys key, bool pressed, NetworkInputState input)
         {
-            if (key == Keys.Left)
+            if (key == Keys.Left || key == Keys.A)
             {
                 input.Left = pressed;
                 return true;
             }
-            if (key == Keys.Right)
+            if (key == Keys.Right || key == Keys.D)
             {
                 input.Right = pressed;
                 return true;
             }
-            if (key == Keys.Up)
+            if (key == Keys.Up || key == Keys.W)
             {
                 input.Up = pressed;
                 return true;
             }
-            if (key == Keys.Down)
+            if (key == Keys.Down || key == Keys.S)
             {
                 input.Down = pressed;
                 return true;
@@ -420,13 +420,13 @@ namespace Peace_of_Tanks
             if (firstPlayer && player1.message.isSpace && player1.message.pauseSpace == 0)
             {
                 player1.message.pauseSpace = 10;
-                bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1));
+                bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1, player1.attack));
             }
 
             if (secondPlayer && player2.message.isSpace && player2.message.pauseSpace == 0)
             {
                 player2.message.pauseSpace = 10;
-                bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2));
+                bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2, player2.attack));
             }
         }
 

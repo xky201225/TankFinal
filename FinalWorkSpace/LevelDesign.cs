@@ -29,33 +29,34 @@ namespace Peace_of_Tanks
 
         public void Level1(Form MW, List<Box> boxes)
         {
+            // 战场规模扩大到原来的3倍
             masPointsSpawnEnemy[0, 0] = 0;
-            masPointsSpawnEnemy[0, 1] = 400;
-            masPointsSpawnEnemy[1, 0] = 700;
-            masPointsSpawnEnemy[1, 1] = 400;
-            masPointsSpawnEnemy[2, 0] = 350;
+            masPointsSpawnEnemy[0, 1] = 1200;
+            masPointsSpawnEnemy[1, 0] = 2100;
+            masPointsSpawnEnemy[1, 1] = 1200;
+            masPointsSpawnEnemy[2, 0] = 1050;
             masPointsSpawnEnemy[2, 1] = 0;
-            masPointsSpawnEnemy[3, 0] = 350;
-            masPointsSpawnEnemy[3, 1] = 700;
+            masPointsSpawnEnemy[3, 0] = 1050;
+            masPointsSpawnEnemy[3, 1] = 2100;
 
             masPointsSpawnPlayers[0, 0] = 0;
             masPointsSpawnPlayers[0, 1] = 0;
-            masPointsSpawnPlayers[1, 0] = 700;
+            masPointsSpawnPlayers[1, 0] = 2100;
             masPointsSpawnPlayers[1, 1] = 0;
             masPointsSpawnPlayers[2, 0] = 0;
-            masPointsSpawnPlayers[2, 1] = 700;
-            masPointsSpawnPlayers[3, 0] = 700;
-            masPointsSpawnPlayers[3, 1] = 700;
+            masPointsSpawnPlayers[2, 1] = 2100;
+            masPointsSpawnPlayers[3, 0] = 2100;
+            masPointsSpawnPlayers[3, 1] = 2100;
 
             boxes.Clear();
 
-            int y = 75;
-            int x = 100;
+            int y = 225;  // 75 * 3
+            int x = 300;  // 100 * 3
 
             Box box = new Box_Wall(x, y);
-            for (x = 100; x <= 700; x += 25)
+            for (x = 300; x <= 2100; x += 25)
             {
-                if(x < 350 || x > 450)
+                if(x < 1050 || x > 1350)
                 {
                     box = new Box_Wall(x, y);
                     boxes.Add(box);
@@ -63,10 +64,10 @@ namespace Peace_of_Tanks
                     boxes.Add(box);
                 }
             }
-            y = 650;
-            for (x = 100; x <= 700; x += 25)
+            y = 1950;  // 650 * 3
+            for (x = 300; x <= 2100; x += 25)
             {
-                if (x < 350 || x > 450)
+                if (x < 1050 || x > 1350)
                 {
                     box = new Box_Wall(x, y);
                     boxes.Add(box);
@@ -74,11 +75,11 @@ namespace Peace_of_Tanks
                     boxes.Add(box);
                 }
             }
-            x = 100;
-            int x2 = 675;
-            for (y = 125; y < 675; y += 25)
+            x = 300;  // 100 * 3
+            int x2 = 2025;  // 675 * 3
+            for (y = 375; y < 2025; y += 25)  // 125 * 3 到 675 * 3
             {
-                if (y < 350 || y > 450)
+                if (y < 1050 || y > 1350)
                 {
                     box = new Box_Wall(x, y);
                     boxes.Add(box);
@@ -91,17 +92,17 @@ namespace Peace_of_Tanks
                 }
             }
 
-            for (x = 300; x <= 500; x += 25)
+            for (x = 900; x <= 1500; x += 25)  // 300 * 3 到 500 * 3
             {
-                for(y = 250; y <= 500; y += 25)
+                for(y = 750; y <= 1500; y += 25)  // 250 * 3 到 500 * 3
                 {
                     box = new Box_Water(x, y);
                     boxes.Add(box);
                 }
             }
 
-            x = 200;
-            for(y = 200; y < 500; y += 25)
+            x = 600;  // 200 * 3
+            for(y = 600; y < 1500; y += 25)  // 200 * 3 到 500 * 3
             {
                 box = new Box_Green(x, y);
                 boxes.Add(box);
@@ -109,8 +110,8 @@ namespace Peace_of_Tanks
                 boxes.Add(box);
             }
 
-            x = 575;
-            for (y = 200; y < 500; y += 25)
+            x = 1725;  // 575 * 3
+            for (y = 600; y < 1500; y += 25)  // 200 * 3 到 500 * 3
             {
                 box = new Box_Iron(x, y);
                 boxes.Add(box);

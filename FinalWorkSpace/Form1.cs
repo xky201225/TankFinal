@@ -34,6 +34,13 @@ namespace Peace_of_Tanks
         Settings setting = new Settings();
         LevelDesign level = new LevelDesign();
 
+        // 经验系统相关
+        private GameMode currentGameMode = GameMode.SinglePlayer;
+        private TankType selectedTankType = TankType.Green;
+        private bool returnToLobby = false;  // 标记是否返回大厅
+
+        public bool ReturnToLobby { get { return returnToLobby; } }
+
         List<BaseTank> tanks = new List<BaseTank>();
         List<EnemyTank> enemies = new List<EnemyTank>();
         List<Bullet> bullets = new List<Bullet>();
@@ -64,7 +71,7 @@ namespace Peace_of_Tanks
                     PicTank.Location = new Point(270, PicTank.Location.Y - 40);
                     menu--;
                 }
-                if (e.KeyCode == Keys.Down && menu != 4)
+                if (e.KeyCode == Keys.Down && menu != 5)  // 现在有6个选项（0-5）
                 {
                     PicTank.Location = new Point(270, PicTank.Location.Y + 40);
                     menu++;
@@ -82,6 +89,12 @@ namespace Peace_of_Tanks
                         modeMenu = 6;
                     else if (menu == 4)
                         modeMenu = 7;
+                    else if (menu == 5)  // 返回大厅
+                    {
+                        returnToLobby = true;
+                        this.Close();
+                        return;
+                    }
                     else modeMenu = 1;
 
                     MenuWorking();
@@ -161,15 +174,41 @@ namespace Peace_of_Tanks
             }
             else
             {
+                // 游戏中按ESC键返回主菜单
+                if (e.KeyCode == Keys.Escape)
+                {
+                    modeMenu = 0;
+                    timer1.Enabled = false;
+
+                    // 清理游戏状态
+                    for (int i = 0; i < enemies.Count; i++)
+                        MoveEnemy -= enemies[i].Move;
+                    enemies.Clear();
+                    bullets.Clear();
+                    animations.Clear();
+
+                    if (firstPlayer) MovePlayer1 -= player1.Move;
+                    if (secondPlayer) MovePlayer2 -= player2.Move;
+
+                    firstPlayer = true;
+                    secondPlayer = false;
+
+                    grMemory.DrawImage(BackgroundImage, 0, 0);
+                    grMain.DrawImage(BackgroundImage, 0, 0);
+
+                    MenuWorking();
+                    return;
+                }
+
                 if (firstPlayer)
                 {
-                    if (e.KeyCode == Keys.Up)
+                    if (e.KeyCode == Keys.Up || e.KeyCode == Keys.W)
                         player1.message.isUp = true;
-                    else if (e.KeyCode == Keys.Down)
+                    else if (e.KeyCode == Keys.Down || e.KeyCode == Keys.S)
                         player1.message.isDown = true;
-                    else if (e.KeyCode == Keys.Left)
+                    else if (e.KeyCode == Keys.Left || e.KeyCode == Keys.A)
                         player1.message.isLeft = true;
-                    else if (e.KeyCode == Keys.Right)
+                    else if (e.KeyCode == Keys.Right || e.KeyCode == Keys.D)
                         player1.message.isRight = true;
                     else if (e.KeyCode == Keys.NumPad0)
                         player1.message.isSpace = true;
@@ -202,13 +241,13 @@ namespace Peace_of_Tanks
             {
                 if (firstPlayer)
                 {
-                    if (e.KeyCode == Keys.Up)
+                    if (e.KeyCode == Keys.Up || e.KeyCode == Keys.W)
                         player1.message.isUp = false;
-                    else if (e.KeyCode == Keys.Down)
+                    else if (e.KeyCode == Keys.Down || e.KeyCode == Keys.S)
                         player1.message.isDown = false;
-                    else if (e.KeyCode == Keys.Left)
+                    else if (e.KeyCode == Keys.Left || e.KeyCode == Keys.A)
                         player1.message.isLeft = false;
-                    else if (e.KeyCode == Keys.Right)
+                    else if (e.KeyCode == Keys.Right || e.KeyCode == Keys.D)
                         player1.message.isRight = false;
 
                     else if (e.KeyCode == Keys.NumPad0)
@@ -331,6 +370,7 @@ namespace Peace_of_Tanks
             PicButtonStat.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 2, menuWidth, menuHeight);
             PicRules.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 3, menuWidth, menuHeight);
             PicAbout.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 4, menuWidth, menuHeight);
+            PicBackToLobby.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 5, menuWidth, menuHeight);  // 返回大厅
 
             PicButtonEasy.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 0, menuWidth, menuHeight);
             PicButtonHard.SetBounds(menuCenterX - menuWidth / 2, menuStartY + menuStepY * 1, menuWidth, menuHeight);
@@ -347,6 +387,7 @@ namespace Peace_of_Tanks
             PicButtonStat.Image = CreateTextBitmap("战绩排行", PicButtonStat.Width, PicButtonStat.Height, 15);
             PicRules.Image = CreateTextBitmap("游戏规则", PicRules.Width, PicRules.Height, 15);
             PicAbout.Image = CreateTextBitmap("项目说明", PicAbout.Width, PicAbout.Height, 15);
+            PicBackToLobby.Image = CreateTextBitmap("返回大厅", PicBackToLobby.Width, PicBackToLobby.Height, 15);  // 返回大厅
             PicturePlayer1_.Image = CreateTextBitmap("一号玩家", PicturePlayer1_.Width, PicturePlayer1_.Height, 17);
             picturePlayer2_.Image = CreateTextBitmap("二号玩家", picturePlayer2_.Width, picturePlayer2_.Height, 17);
 
@@ -362,7 +403,13 @@ namespace Peace_of_Tanks
         {
             heart = new Bitmap(Peace_of_Tanks.Properties.Resources.heart);
             gameover = CreateTextBitmap("游戏结束", 100, 50, 20);
-            BackgroundImage = Peace_of_Tanks.Properties.Resources.blackSquare;
+
+            // 使用新的背景图（菜单页面用jiazai.png，游戏中用war.png）
+            if (ResourceManager.MenuBackground != null && ResourceManager.MenuBackground.Width > 1)
+                BackgroundImage = new Bitmap(ResourceManager.MenuBackground);
+            else
+                BackgroundImage = Peace_of_Tanks.Properties.Resources.blackSquare;
+
             Text = "和平坦克大战";
 
             RichAbout.Text = "        项目说明        \n\n" +
@@ -389,6 +436,7 @@ namespace Peace_of_Tanks
             picturePlayer2_.SizeMode = PictureBoxSizeMode.StretchImage;
             PicRules.SizeMode = PictureBoxSizeMode.StretchImage;
             PicAbout.SizeMode = PictureBoxSizeMode.StretchImage;
+            PicBackToLobby.SizeMode = PictureBoxSizeMode.StretchImage;  // 返回大厅
             PicButtonStat.SizeMode = PictureBoxSizeMode.StretchImage;
             PicTank.Image = Peace_of_Tanks.Properties.Resources.PicTank;
             PicTank.SizeMode = PictureBoxSizeMode.StretchImage;
@@ -404,7 +452,7 @@ namespace Peace_of_Tanks
         {
             if (modeMenu == 0)
             {
-                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicRules.Visible = PicAbout.Visible = true;
+                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = true;
                 PicButton1Player.Show();
                 PicButton2Player.Show();
                 PicButtonStat.Show();
@@ -414,14 +462,14 @@ namespace Peace_of_Tanks
             }
             else if (modeMenu == 1)
             {
-                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicRules.Visible = PicAbout.Visible = false;
+                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
                 PicTank.Location = new Point(PicButtonEasy.Left - 55, PicButtonEasy.Top);
                 menu = 0;
                 PicButtonEasy.Visible = PicButtonHard.Visible = PicButtonReal.Visible = true;
             }
             else if(modeMenu == 2)
             {
-                PicButtonEasy.Visible = PicButtonHard.Visible = PicButtonReal.Visible =  PicTank.Visible = PicRules.Visible = PicAbout.Visible = false;
+                PicButtonEasy.Visible = PicButtonHard.Visible = PicButtonReal.Visible =  PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
                 PicTank.Location = new Point(PicButton1Player.Left - 55, PicButton1Player.Top);
                 menu = 0;
                 PicLevel.Visible = true;
@@ -429,12 +477,24 @@ namespace Peace_of_Tanks
             }
             else if(modeMenu == 3)
             {
+                // 切换到战场背景
+                if (ResourceManager.WarBackground != null && ResourceManager.WarBackground.Width > 1)
+                    BackgroundImage = new Bitmap(ResourceManager.WarBackground);
+                else
+                    BackgroundImage = Peace_of_Tanks.Properties.Resources.blackSquare;
+
                 isReadyTo1Level();
                 timer1.Interval = 25;
                 timer1.Enabled = true;
             }
             else if (modeMenu == 4)
             {
+                // 切回菜单背景
+                if (ResourceManager.MenuBackground != null && ResourceManager.MenuBackground.Width > 1)
+                    BackgroundImage = new Bitmap(ResourceManager.MenuBackground);
+                else
+                    BackgroundImage = Peace_of_Tanks.Properties.Resources.blackSquare;
+
                 timer1.Enabled = false;
                 picturePlayer2_.Visible = false;
                 PicturePlayer1_.Visible = false;
@@ -450,7 +510,7 @@ namespace Peace_of_Tanks
                 grMemory.DrawImage(BackgroundImage, 0, 0);
                 grMain.DrawImage(BackgroundImage, 0, 0);
 
-                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = false;
+                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 ShowStatistic();
 
@@ -461,7 +521,7 @@ namespace Peace_of_Tanks
                 grMemory.DrawImage(BackgroundImage, 0, 0);
                 grMain.DrawImage(BackgroundImage, 0, 0);
 
-                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = false;
+                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 RichRules.Visible = true;
                 RichRules.ReadOnly = true;
@@ -473,7 +533,7 @@ namespace Peace_of_Tanks
                 grMemory.DrawImage(BackgroundImage, 0, 0);
                 grMain.DrawImage(BackgroundImage, 0, 0);
 
-                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = false;
+                PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 RichAbout.Visible = true;
                 RichAbout.ReadOnly = true;
@@ -650,18 +710,34 @@ namespace Peace_of_Tanks
                 level.Level1(this, boxes);
 
                 timeSpawn = setting.timeSpawn;
-                EnemyTank enemy = new EnemyTank(Peace_of_Tanks.Properties.Resources.enemy11, Peace_of_Tanks.Properties.Resources.enemy12,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[0, 0], level.masPointsSpawnEnemy[0, 1], 2);
+
+                // 生成随机颜色的敌方坦克
+                TankType enemyType1 = TankResourceLoader.GetRandomEnemyTankType();
+                var (img1_1, img1_2) = TankResourceLoader.GetEnemyTankImages(enemyType1);
+                var config1 = TankConfigs.GetConfig(enemyType1);
+                EnemyTank enemy = new EnemyTank(img1_1, img1_2,
+                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[0, 0], level.masPointsSpawnEnemy[0, 1], 2,
+                    config1.BaseHealth, config1.BaseAttack);
                 enemies.Add(enemy);
                 tanks.Add(enemy);
                 MoveEnemy += enemy.Move;
-                enemy = new EnemyTank(Peace_of_Tanks.Properties.Resources.enemy11, Peace_of_Tanks.Properties.Resources.enemy12,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[1, 0], level.masPointsSpawnEnemy[1, 1], 2);
+
+                TankType enemyType2 = TankResourceLoader.GetRandomEnemyTankType();
+                var (img2_1, img2_2) = TankResourceLoader.GetEnemyTankImages(enemyType2);
+                var config2 = TankConfigs.GetConfig(enemyType2);
+                enemy = new EnemyTank(img2_1, img2_2,
+                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[1, 0], level.masPointsSpawnEnemy[1, 1], 2,
+                    config2.BaseHealth, config2.BaseAttack);
                 enemies.Add(enemy);
                 tanks.Add(enemy);
                 MoveEnemy += enemy.Move;
-                enemy = new EnemyTank(Peace_of_Tanks.Properties.Resources.enemy11, Peace_of_Tanks.Properties.Resources.enemy12,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[2, 0], level.masPointsSpawnEnemy[2, 1], 2);
+
+                TankType enemyType3 = TankResourceLoader.GetRandomEnemyTankType();
+                var (img3_1, img3_2) = TankResourceLoader.GetEnemyTankImages(enemyType3);
+                var config3 = TankConfigs.GetConfig(enemyType3);
+                enemy = new EnemyTank(img3_1, img3_2,
+                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[2, 0], level.masPointsSpawnEnemy[2, 1], 2,
+                    config3.BaseHealth, config3.BaseAttack);
                 tanks.Add(enemy);
                 enemies.Add(enemy);
                 MoveEnemy += enemy.Move;
@@ -789,8 +865,14 @@ namespace Peace_of_Tanks
                         num = random.Next(0, 4);
                     }
 
-                    EnemyTank enemy = new EnemyTank(Peace_of_Tanks.Properties.Resources.enemy11, Peace_of_Tanks.Properties.Resources.enemy12,
-                        Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[num, 0], level.masPointsSpawnEnemy[num, 1], 2);
+                    // 生成随机颜色的敌方坦克
+                    TankType enemyType = TankResourceLoader.GetRandomEnemyTankType();
+                    var (imgEnemy1, imgEnemy2) = TankResourceLoader.GetEnemyTankImages(enemyType);
+                    var configEnemy = TankConfigs.GetConfig(enemyType);
+
+                    EnemyTank enemy = new EnemyTank(imgEnemy1, imgEnemy2,
+                        Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[num, 0], level.masPointsSpawnEnemy[num, 1], 2,
+                        configEnemy.BaseHealth, configEnemy.BaseAttack);
                     enemies.Add(enemy);
                     tanks.Add(enemy);
                     MoveEnemy += enemy.Move;
@@ -817,7 +899,7 @@ namespace Peace_of_Tanks
                             anim.message.x = boxes[j].x;
                             anim.message.y = boxes[j].y;
                             anim.message.type = 0;
-                            anim.message.delay = 10;
+                            anim.message.delay = 15;  // 击中效果3帧，每帧5tick
                             DelayEvent += anim.Delay;
 
                             animations.Add(anim);
@@ -851,9 +933,12 @@ namespace Peace_of_Tanks
 
                         if (bullets[i].who != 0)
                         {
-                            enemies[j].hitpoints--;
+                            enemies[j].hitpoints -= bullets[i].damage;  // 使用子弹伤害
+                            if (enemies[j].hitpoints <= 0)
+                            {
+                                setting.countEnemies--;
+                            }
                             bullets.RemoveAt(i);
-                            setting.countEnemies--;
                             bulletDeath = true;
 
                             break;
@@ -867,7 +952,7 @@ namespace Peace_of_Tanks
                     if(bullets[i].who == 2)
                         setting.pointsPlayer2 += setting.pointsForPlayers;
 
-                    player1.hitpoints--;
+                    player1.hitpoints -= bullets[i].damage;  // 使用子弹伤害
                     bullets.RemoveAt(i);
                     bulletDeath = true;
                 }
@@ -878,7 +963,7 @@ namespace Peace_of_Tanks
                     if (bullets[i].who == 1)
                         setting.pointsPlayer1 += setting.pointsForPlayers;
 
-                    player2.hitpoints--;
+                    player2.hitpoints -= bullets[i].damage;  // 使用子弹伤害
                     bullets.RemoveAt(i);
                     bulletDeath = true;
                 }
@@ -951,7 +1036,7 @@ namespace Peace_of_Tanks
                     pauseGameOver -= 1;
                 }
 
-                if (pauseGameOver == 0)   /////////////// сохранение статистики
+                if (pauseGameOver == 0)   /////////////// 保存统计信息和奖励经验
                 {
                     stats bufStat = new stats();
                     bufStat.difficulty = setting.difficulty;
@@ -968,6 +1053,19 @@ namespace Peace_of_Tanks
                     bufStat.points = setting.pointsPlayer2;
 
                     setting.stats2 = bufStat;
+
+                    // 奖励经验值（单人模式不奖励经验，只有匹配模式才奖励）
+                    if (currentGameMode == GameMode.TwoPlayer)
+                    {
+                        // 双人匹配模式：根据胜负奖励经验
+                        int rank = (setting.pointsPlayer1 > setting.pointsPlayer2) ? 1 : 2;
+                        DataManager.RewardExp(GameMode.TwoPlayer, rank);
+                    }
+                    else if (currentGameMode == GameMode.ThreePlayer)
+                    {
+                        // 三人匹配模式：根据排名奖励经验（这里暂时按第一名处理）
+                        DataManager.RewardExp(GameMode.ThreePlayer, 1);
+                    }
 
                     for (int i = 0; i < enemies.Count; i++)
                         MoveEnemy -= enemies[i].Move;
@@ -1010,7 +1108,7 @@ namespace Peace_of_Tanks
             for (int i = 0; i < enemies.Count; i++) //пауза между выстрелами у ботов
                 enemies[i].message.pauseSpace--;
 
-            for (int i = 0; i < 5; i++)                                                         // движение танков(внутри проверка на соприкосновения танков)
+            for (int i = 0; i < 8; i++)                                                         // движение танков(внутри проверка на соприкосновения танков)
             {
                 if (firstPlayer) MovePlayer1(this, null, player1.message, boxes, tanks);
                 if (secondPlayer) MovePlayer2(this, null, player2.message, boxes, tanks);
@@ -1136,9 +1234,16 @@ namespace Peace_of_Tanks
         }
 
         //начальная инициализация
-        public MainWindow()
+        public MainWindow() : this(GameMode.SinglePlayer, TankType.Green)
+        {
+        }
+
+        public MainWindow(GameMode mode, TankType tankType)
         {
             InitializeComponent();
+
+            currentGameMode = mode;
+            selectedTankType = tankType;
 
             backgroundMain = new Bitmap(Peace_of_Tanks.Properties.Resources.blackSquare);
             backgroundMemory = new Bitmap(Peace_of_Tanks.Properties.Resources.blackSquare);
@@ -1152,7 +1257,18 @@ namespace Peace_of_Tanks
             Animation.megaBoom1 = Peace_of_Tanks.Properties.Resources.megaBoom1;
             Animation.megaBoom2 = Peace_of_Tanks.Properties.Resources.megaBoom2;
 
-            player1 = new PlayerTank(Peace_of_Tanks.Properties.Resources.player1_1, Peace_of_Tanks.Properties.Resources.player1_2, Peace_of_Tanks.Properties.Resources.bullet1, -100, -100, 2);
+            // 使用选中的坦克类型创建玩家坦克
+            var playerData = DataManager.CurrentPlayer;
+            var playerTankData = playerData.Tanks[selectedTankType];
+            var config = TankConfigs.GetConfig(selectedTankType);
+
+            int attack = config.GetAttackAtLevel(playerTankData.Level);
+            int health = config.GetHealthAtLevel(playerTankData.Level);
+
+            // 加载对应颜色的坦克图片
+            var (tankImg1, tankImg2) = TankResourceLoader.GetPlayerTankImages(selectedTankType);
+
+            player1 = new PlayerTank(tankImg1, tankImg2, Peace_of_Tanks.Properties.Resources.bullet1, -100, -100, 2, health, attack);
             player2 = new PlayerTank(Peace_of_Tanks.Properties.Resources.player2_1, Peace_of_Tanks.Properties.Resources.player2_2, Peace_of_Tanks.Properties.Resources.bullet1, -50, -50, 2);
 
             if(File.Exists("stats.dat"))

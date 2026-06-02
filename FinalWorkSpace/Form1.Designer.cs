@@ -42,6 +42,7 @@ namespace Peace_of_Tanks
             this.labelStat10 = new System.Windows.Forms.Label();
             this.PicAbout = new System.Windows.Forms.PictureBox();
             this.PicRules = new System.Windows.Forms.PictureBox();
+            this.PicBackToLobby = new System.Windows.Forms.PictureBox();  // 返回大厅按钮
             this.PictureStat2 = new System.Windows.Forms.PictureBox();
             this.PictureStat1 = new System.Windows.Forms.PictureBox();
             this.PicturePlayer1_ = new System.Windows.Forms.PictureBox();
@@ -58,6 +59,7 @@ namespace Peace_of_Tanks
             this.RichRules = new System.Windows.Forms.RichTextBox();
             ((System.ComponentModel.ISupportInitialize)(this.PicAbout)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.PicRules)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.PicBackToLobby)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.PictureStat2)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.PictureStat1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.PicturePlayer1_)).BeginInit();
@@ -396,14 +398,23 @@ namespace Peace_of_Tanks
             this.RichRules.TabIndex = 30;
             this.RichRules.Text = "";
             this.RichRules.Visible = false;
-            // 
+            //
+            // PicBackToLobby
+            //
+            this.PicBackToLobby.Location = new System.Drawing.Point(335, 535);
+            this.PicBackToLobby.Name = "PicBackToLobby";
+            this.PicBackToLobby.Size = new System.Drawing.Size(158, 16);
+            this.PicBackToLobby.TabIndex = 31;
+            this.PicBackToLobby.TabStop = false;
+            //
             // MainWindow
-            // 
+            //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(784, 811);
+            this.ClientSize = new System.Drawing.Size(2400, 2400);  // 扩大到3倍战场大小
             this.Controls.Add(this.RichRules);
             this.Controls.Add(this.RichAbout);
+            this.Controls.Add(this.PicBackToLobby);
             this.Controls.Add(this.PicAbout);
             this.Controls.Add(this.PicRules);
             this.Controls.Add(this.labelStat10);
@@ -445,6 +456,7 @@ namespace Peace_of_Tanks
             this.MouseUp += new System.Windows.Forms.MouseEventHandler(this.MainWindow_MouseUp);
             ((System.ComponentModel.ISupportInitialize)(this.PicAbout)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PicRules)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.PicBackToLobby)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PictureStat2)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PictureStat1)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PicturePlayer1_)).EndInit();
@@ -494,6 +506,7 @@ namespace Peace_of_Tanks
         private System.Windows.Forms.Label labelStat10;
         private System.Windows.Forms.PictureBox PicRules;
         private System.Windows.Forms.PictureBox PicAbout;
+        private System.Windows.Forms.PictureBox PicBackToLobby;
         private System.Windows.Forms.RichTextBox RichAbout;
         private System.Windows.Forms.RichTextBox RichRules;
     }
