@@ -44,6 +44,7 @@ namespace Peace_of_Tanks
         public int hitpoints = 1;
         public int maxHitpoints = 1;  // 最大生命值
         public int attack = 10;        // 攻击力
+        public TankType TankType = TankType.Green;
         protected double preciseX, preciseY;
         public int direction; //0 - left, 1 - right, 2 - up, 3 - down
         public int x

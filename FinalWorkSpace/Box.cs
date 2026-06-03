@@ -19,7 +19,7 @@ namespace Peace_of_Tanks
             this.y = y;
         }
 
-        public void Draw(Graphics grMemory)
+        public virtual void Draw(Graphics grMemory)
         {
             grMemory.DrawImage(pictureBox, x, y, 25, 25);
         }
@@ -67,6 +67,48 @@ namespace Peace_of_Tanks
         {
             hitPoint = 5;
             pictureBox = ResourceManager.TerrainBase ?? Peace_of_Tanks.Properties.Resources.base_tile;
+        }
+
+        protected void DrawBaseImage(Graphics grMemory)
+        {
+            grMemory.DrawImage(pictureBox, x, y, 25, 25);
+        }
+
+        protected void DrawBaseGlow(Graphics grMemory, Color color)
+        {
+            using (Pen outer = new Pen(color, 3))
+            using (Pen inner = new Pen(Color.FromArgb(210, color.R, color.G, color.B), 1))
+            {
+                grMemory.DrawRectangle(outer, x - 2, y - 2, 28, 28);
+                grMemory.DrawRectangle(inner, x, y, 24, 24);
+            }
+        }
+    }
+
+    class Box_PlayerBase : Box_Base
+    {
+        public Box_PlayerBase(int x, int y) : base(x, y)
+        {
+        }
+
+        public override void Draw(Graphics grMemory)
+        {
+            DrawBaseGlow(grMemory, Color.FromArgb(120, 80, 235, 120));
+            base.Draw(grMemory);
+        }
+
+    }
+
+    class Box_EnemyBase : Box_Base
+    {
+        public Box_EnemyBase(int x, int y) : base(x, y)
+        {
+        }
+
+        public override void Draw(Graphics grMemory)
+        {
+            DrawBaseGlow(grMemory, Color.FromArgb(135, 255, 82, 82));
+            DrawBaseImage(grMemory);
         }
     }
 }

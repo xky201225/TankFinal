@@ -4,7 +4,7 @@ namespace Peace_of_Tanks
 {
     internal static class GameTiming
     {
-        public const int TimerIntervalMs = 16;
+        public const int TimerIntervalMs = 8;
         private const int LegacyTimerIntervalMs = 25;
 
         public static double ScaleDistance(double legacyDistance)

@@ -8,7 +8,7 @@ namespace Peace_of_Tanks
         private const int BulletSize = 10;
         private const int TankSize = 50;
         private const int TankCenterOffset = (TankSize - BulletSize) / 2;
-        private static readonly double Speed = GameTiming.ScaleDistance(62.5);
+        private static readonly double Speed = GameTiming.ScaleDistance(125);
         private const double CollisionStep = 5.0;
         private readonly Bitmap pictureBullet;
         private double preciseX;

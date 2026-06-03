@@ -43,6 +43,7 @@ namespace Peace_of_Tanks
         private int player1Kills;
         private int player2Kills;
         private bool baseDestroyed;
+        private int destroyedBaseOwner;
         private int activeEnemyLimit = 3;
         private int player1Damage;
         private int player2Damage;
@@ -50,6 +51,7 @@ namespace Peace_of_Tanks
         private int player2Deaths;
         private bool settlementShown;
         private bool expRewarded;
+        private int lastSettlementExpGain;
         private readonly List<Control> settlementControls = new List<Control>();
 
         public bool ReturnToLobby { get { return returnToLobby; } }
@@ -666,10 +668,7 @@ namespace Peace_of_Tanks
                     AddHitEffect(boxes[j].x, boxes[j].y);
                     if (boxes[j].hitPoint == 0)
                     {
-                        if (boxes[j] is Box_Base)
-                        {
-                            baseDestroyed = true;
-                        }
+                        MarkBaseDestroyed(boxes[j]);
 
                         boxes.RemoveAt(j);
                     }
@@ -699,15 +698,7 @@ namespace Peace_of_Tanks
                         enemies[j].hitpoints -= bullet.damage;
                         if (enemies[j].hitpoints <= 0)
                         {
-                            setting.countEnemies--;
-                            if (bullet.who == 1)
-                            {
-                                player1Kills++;
-                            }
-                            else if (bullet.who == 2)
-                            {
-                                player2Kills++;
-                            }
+                            RegisterEnemyKill(bullet.who);
                         }
 
                         bullets.RemoveAt(bulletIndex);
@@ -809,6 +800,15 @@ namespace Peace_of_Tanks
                     .ThenBy(r => r.Deaths)
                     .ToList();
             }
+            else if (launchOptions != null && launchOptions.BattleRule == BattleRuleMode.BaseDefense && destroyedBaseOwner != 0)
+            {
+                results = results
+                    .OrderByDescending(r => GetBaseDefenseWinnerSortValue(r))
+                    .ThenByDescending(r => r.Kills)
+                    .ThenByDescending(r => r.Damage)
+                    .ThenBy(r => r.Deaths)
+                    .ToList();
+            }
             else
             {
                 results = results
@@ -843,6 +843,35 @@ namespace Peace_of_Tanks
             return activePlayers;
         }
 
+        private int GetBaseDefenseWinnerSortValue(PlayerResultSnapshot result)
+        {
+            string playerName = destroyedBaseOwner == 1 ? "玩家2" : "玩家1";
+            if (!networkMode && currentGameMode == GameMode.SinglePlayer && destroyedBaseOwner == 2)
+            {
+                playerName = "己方";
+            }
+
+            return result.Name == playerName ? 1 : 0;
+        }
+
+        private void MarkBaseDestroyed(Box box)
+        {
+            if (!(box is Box_Base))
+            {
+                return;
+            }
+
+            baseDestroyed = true;
+            if (box is Box_PlayerBase)
+            {
+                destroyedBaseOwner = 1;
+            }
+            else if (box is Box_EnemyBase)
+            {
+                destroyedBaseOwner = 2;
+            }
+        }
+
         private void HandleEscapeExitBattle()
         {
             DialogResult result = MessageBox.Show(this, "确定要退出当前对局吗？", "退出对局", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
@@ -868,7 +897,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            RewardExpForSettlement(results);
+            lastSettlementExpGain = RewardExpForSettlement(results);
             settlementShown = true;
             timer1.Enabled = false;
             HideOverlayControls();
@@ -894,6 +923,17 @@ namespace Peace_of_Tanks
                 Location = new Point(310, 105)
             };
             shade.Controls.Add(title);
+
+            Label expGain = new Label
+            {
+                Text = "本局经验 +" + lastSettlementExpGain,
+                Font = new Font("Microsoft YaHei UI", 15, FontStyle.Bold),
+                ForeColor = Color.FromArgb(255, 224, 146),
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Location = new Point(505, 118)
+            };
+            shade.Controls.Add(expGain);
 
             string[] headers = { "排名", "玩家", "伤害", "击杀", "死亡", "KD" };
             int[] xs = { 62, 148, 285, 402, 512, 612 };
@@ -954,17 +994,18 @@ namespace Peace_of_Tanks
             };
         }
 
-        private void RewardExpForSettlement(List<PlayerResultSnapshot> results)
+        private int RewardExpForSettlement(List<PlayerResultSnapshot> results)
         {
-            if (expRewarded || results == null || currentGameMode == GameMode.SinglePlayer)
+            if (expRewarded || results == null)
             {
-                return;
+                return 0;
             }
 
             PlayerResultSnapshot localResult = results.FirstOrDefault(r => r.Name == GetLocalSettlementName());
             int rank = localResult != null && localResult.Rank > 0 ? localResult.Rank : 1;
-            DataManager.RewardExp(currentGameMode, rank);
+            int exp = DataManager.RewardExp(currentGameMode, rank);
             expRewarded = true;
+            return exp;
         }
 
         private string GetLocalSettlementName()
@@ -1002,8 +1043,10 @@ namespace Peace_of_Tanks
             player1Deaths = 0;
             player2Deaths = 0;
             baseDestroyed = false;
+            destroyedBaseOwner = 0;
             settlementShown = false;
             expRewarded = false;
+            lastSettlementExpGain = 0;
             ClearSettlementControls();
         }
 
@@ -1128,10 +1171,47 @@ namespace Peace_of_Tanks
                 2,
                 config.BaseHealth,
                 config.BaseAttack);
+            enemy.TankType = enemyType;
 
             enemies.Add(enemy);
             tanks.Add(enemy);
             MoveEnemy += enemy.Move;
+        }
+
+        private bool ShouldKeepEnemyCountStable()
+        {
+            return launchOptions != null
+                && (launchOptions.BattleRule == BattleRuleMode.FreeBattle || launchOptions.BattleRule == BattleRuleMode.BaseDefense);
+        }
+
+        private void RegisterEnemyKill(int shooter)
+        {
+            if (!ShouldKeepEnemyCountStable())
+            {
+                setting.countEnemies--;
+            }
+
+            if (shooter == 1)
+            {
+                player1Kills++;
+            }
+            else if (shooter == 2)
+            {
+                player2Kills++;
+            }
+        }
+
+        private void RefillEnemiesIfNeeded()
+        {
+            if (!ShouldKeepEnemyCountStable())
+            {
+                return;
+            }
+
+            while (enemies.Count < activeEnemyLimit)
+            {
+                SpawnEnemyAt(enemies.Count);
+            }
         }
 
         private int GetEnemySpawnIndex(int enemyNumber)
@@ -1297,12 +1377,12 @@ namespace Peace_of_Tanks
                 tanks.Add(player1);
                 tanks.Add(player2);
 
-                player1.hitpoints = 1;
+                player1.hitpoints = player1.maxHitpoints;
 
                 if (launchOptions != null && launchOptions.MapConfig != null)
                 {
                     level.SetDefaultSpawnPoints();
-                    BattleMapFactory.ApplyMap(launchOptions.MapConfig, boxes);
+                    BattleMapFactory.ApplyMap(launchOptions.MapConfig, boxes, launchOptions.BattleRule);
                 }
                 else
                 {
@@ -1312,36 +1392,10 @@ namespace Peace_of_Tanks
 
                 timeSpawn = setting.timeSpawn;
 
-                // 鐢熸垚闅忔満棰滆壊鐨勬晫鏂瑰潶鍏?
-                TankType enemyType1 = TankResourceLoader.GetRandomEnemyTankType();
-                var (img1_1, img1_2) = TankResourceLoader.GetEnemyTankImages(enemyType1);
-                var config1 = TankConfigs.GetConfig(enemyType1);
-                EnemyTank enemy = new EnemyTank(img1_1, img1_2,
-                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[0, 0], level.masPointsSpawnEnemy[0, 1], 2,
-                    config1.BaseHealth, config1.BaseAttack);
-                enemies.Add(enemy);
-                tanks.Add(enemy);
-                MoveEnemy += enemy.Move;
-
-                TankType enemyType2 = TankResourceLoader.GetRandomEnemyTankType();
-                var (img2_1, img2_2) = TankResourceLoader.GetEnemyTankImages(enemyType2);
-                var config2 = TankConfigs.GetConfig(enemyType2);
-                enemy = new EnemyTank(img2_1, img2_2,
-                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[1, 0], level.masPointsSpawnEnemy[1, 1], 2,
-                    config2.BaseHealth, config2.BaseAttack);
-                enemies.Add(enemy);
-                tanks.Add(enemy);
-                MoveEnemy += enemy.Move;
-
-                TankType enemyType3 = TankResourceLoader.GetRandomEnemyTankType();
-                var (img3_1, img3_2) = TankResourceLoader.GetEnemyTankImages(enemyType3);
-                var config3 = TankConfigs.GetConfig(enemyType3);
-                enemy = new EnemyTank(img3_1, img3_2,
-                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[2, 0], level.masPointsSpawnEnemy[2, 1], 2,
-                    config3.BaseHealth, config3.BaseAttack);
-                tanks.Add(enemy);
-                enemies.Add(enemy);
-                MoveEnemy += enemy.Move;
+                for (int i = 0; i < Math.Min(3, activeEnemyLimit); i++)
+                {
+                    SpawnEnemyAt(i);
+                }
 
                 Point player1Spawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[0, 0], level.masPointsSpawnPlayers[0, 1], null);
                 player1.x = player1Spawn.X;
@@ -1352,7 +1406,7 @@ namespace Peace_of_Tanks
 
                 if (setting.twoPlayer)
                 {
-                    player2.hitpoints = 1;
+                    player2.hitpoints = player2.maxHitpoints;
                     Point player2Spawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[2, 0], level.masPointsSpawnPlayers[2, 1], tanks);
                     player2.x = player2Spawn.X;
                     player2.y = player2Spawn.Y;
@@ -1361,7 +1415,7 @@ namespace Peace_of_Tanks
                     secondPlayer = true;
                 }
 
-                for (int i = 3; i < activeEnemyLimit; i++)
+                for (int i = enemies.Count; i < activeEnemyLimit; i++)
                 {
                     SpawnEnemyAt(i);
                 }
@@ -1457,7 +1511,7 @@ namespace Peace_of_Tanks
                 DrawKillHud(player1Kills, player2Kills);
             }
 
-            if (timeSpawn == 0 && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
+            if (!ShouldKeepEnemyCountStable() && timeSpawn == 0 && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
             {
                 Random random = new Random();
                 bool[] mas = new bool[4] { false, false, false, false };
@@ -1480,17 +1534,7 @@ namespace Peace_of_Tanks
                         num = random.Next(0, 4);
                     }
 
-                    // 鐢熸垚闅忔満棰滆壊鐨勬晫鏂瑰潶鍏?
-                    TankType enemyType = TankResourceLoader.GetRandomEnemyTankType();
-                    var (imgEnemy1, imgEnemy2) = TankResourceLoader.GetEnemyTankImages(enemyType);
-                    var configEnemy = TankConfigs.GetConfig(enemyType);
-
-                    EnemyTank enemy = new EnemyTank(imgEnemy1, imgEnemy2,
-                        ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[num, 0], level.masPointsSpawnEnemy[num, 1], 2,
-                        configEnemy.BaseHealth, configEnemy.BaseAttack);
-                    enemies.Add(enemy);
-                    tanks.Add(enemy);
-                    MoveEnemy += enemy.Move;
+                    SpawnEnemyAt(num);
 
                     timeSpawn = setting.timeSpawn;
                 }
@@ -1510,10 +1554,7 @@ namespace Peace_of_Tanks
                         AddHitEffect(boxes[j].x, boxes[j].y);
                         if (boxes[j].hitPoint == 0)
                         {
-                            if (boxes[j] is Box_Base)
-                            {
-                                baseDestroyed = true;
-                            }
+                            MarkBaseDestroyed(boxes[j]);
 
                             boxes.RemoveAt(j);
                         }
@@ -1550,15 +1591,7 @@ namespace Peace_of_Tanks
                             enemies[j].hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
                             if (enemies[j].hitpoints <= 0)
                             {
-                                setting.countEnemies--;
-                                if (bullets[i].who == 1)
-                                {
-                                    player1Kills++;
-                                }
-                                else if (bullets[i].who == 2)
-                                {
-                                    player2Kills++;
-                                }
+                                RegisterEnemyKill(bullets[i].who);
                             }
                             bullets.RemoveAt(i);
                             bulletDeath = true;
@@ -1783,6 +1816,7 @@ namespace Peace_of_Tanks
                     tanks.RemoveAt(i + 2);
                     enemies.RemoveAt(i);
                     i--;
+                    RefillEnemiesIfNeeded();
                 }
             }
 
@@ -1802,7 +1836,7 @@ namespace Peace_of_Tanks
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player2));
                     player2.x = respawn.X;
                     player2.y = respawn.Y;
-                    player2.hitpoints = 1;
+                    player2.hitpoints = player2.maxHitpoints;
                 }
                 else
                 {
@@ -1827,7 +1861,7 @@ namespace Peace_of_Tanks
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player1));
                     player1.x = respawn.X;
                     player1.y = respawn.Y;
-                    player1.hitpoints = 1;
+                    player1.hitpoints = player1.maxHitpoints;
                 }
                 else
                 {
@@ -1891,7 +1925,7 @@ namespace Peace_of_Tanks
             var (tankImg1, tankImg2) = TankResourceLoader.GetPlayerTankImages(selectedTankType);
 
             player1 = new PlayerTank(tankImg1, tankImg2, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -100, -100, 2, health, attack);
-            player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2);
+            player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2, config.BaseHealth, config.BaseAttack);
 
             string statsPath = AppPaths.GetDataPath("stats.dat");
             if(File.Exists(statsPath))

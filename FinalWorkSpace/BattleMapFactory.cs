@@ -86,7 +86,38 @@ namespace Peace_of_Tanks
             };
         }
 
+        public static GameMapConfig CloneMap(GameMapConfig source)
+        {
+            GameMapConfig clone = CreateEmpty(source != null ? source.Name : string.Empty);
+            if (source == null || source.Tiles == null)
+            {
+                return clone;
+            }
+
+            clone.Width = source.Width;
+            clone.Height = source.Height;
+            clone.Tiles = new MapTileType[source.Tiles.Length];
+            Array.Copy(source.Tiles, clone.Tiles, source.Tiles.Length);
+            return clone;
+        }
+
+        public static void AddBaseDefenseTiles(GameMapConfig map)
+        {
+            if (map == null || map.Tiles == null)
+            {
+                return;
+            }
+
+            AddFortifiedBaseTiles(map, 2, 15, true);
+            AddFortifiedBaseTiles(map, GridWidth - 4, 15, false);
+        }
+
         public static void ApplyMap(GameMapConfig map, List<Box> boxes)
+        {
+            ApplyMap(map, boxes, BattleRuleMode.FreeBattle);
+        }
+
+        public static void ApplyMap(GameMapConfig map, List<Box> boxes, BattleRuleMode battleRule)
         {
             boxes.Clear();
             if (map == null || map.Tiles == null)
@@ -112,6 +143,11 @@ namespace Peace_of_Tanks
                         boxes.Add(box);
                     }
                 }
+            }
+
+            if (battleRule == BattleRuleMode.BaseDefense)
+            {
+                AddBaseDefenseSites(boxes);
             }
         }
 
@@ -145,6 +181,104 @@ namespace Peace_of_Tanks
                 case MapTileType.Iron: return new Box_Iron(x, y);
                 case MapTileType.Base: return new Box_Base(x, y);
                 default: return null;
+            }
+        }
+
+        private static void AddBaseDefenseSites(List<Box> boxes)
+        {
+            AddFortifiedBase(boxes, 2, 15, true);
+            AddFortifiedBase(boxes, GridWidth - 4, 15, false);
+        }
+
+        private static void AddFortifiedBase(List<Box> boxes, int gridX, int gridY, bool playerBase)
+        {
+            RemoveArea(boxes, gridX - 2, gridY - 2, 5, 5);
+            AddBox(boxes, playerBase ? (Box)new Box_PlayerBase(gridX * TileSize, gridY * TileSize) : new Box_EnemyBase(gridX * TileSize, gridY * TileSize));
+
+            for (int yy = gridY - 1; yy <= gridY + 1; yy++)
+            {
+                for (int xx = gridX - 1; xx <= gridX + 1; xx++)
+                {
+                    if (xx == gridX && yy == gridY)
+                    {
+                        continue;
+                    }
+
+                    if (playerBase && xx < gridX)
+                    {
+                        continue;
+                    }
+
+                    if (!playerBase && xx > gridX)
+                    {
+                        continue;
+                    }
+
+                    AddBox(boxes, new Box_Wall(xx * TileSize, yy * TileSize));
+                }
+            }
+        }
+
+        private static void AddFortifiedBaseTiles(GameMapConfig map, int gridX, int gridY, bool playerBase)
+        {
+            ClearTiles(map, gridX - 2, gridY - 2, 5, 5);
+            SetTile(map, gridX, gridY, MapTileType.Base);
+
+            for (int yy = gridY - 1; yy <= gridY + 1; yy++)
+            {
+                for (int xx = gridX - 1; xx <= gridX + 1; xx++)
+                {
+                    if (xx == gridX && yy == gridY)
+                    {
+                        continue;
+                    }
+
+                    if (playerBase && xx < gridX)
+                    {
+                        continue;
+                    }
+
+                    if (!playerBase && xx > gridX)
+                    {
+                        continue;
+                    }
+
+                    SetTile(map, xx, yy, MapTileType.Wall);
+                }
+            }
+        }
+
+        private static void ClearTiles(GameMapConfig map, int gridX, int gridY, int width, int height)
+        {
+            for (int yy = gridY; yy < gridY + height; yy++)
+            {
+                for (int xx = gridX; xx < gridX + width; xx++)
+                {
+                    SetTile(map, xx, yy, MapTileType.Empty);
+                }
+            }
+        }
+
+        private static void RemoveArea(List<Box> boxes, int gridX, int gridY, int width, int height)
+        {
+            int left = gridX * TileSize;
+            int top = gridY * TileSize;
+            int right = (gridX + width) * TileSize;
+            int bottom = (gridY + height) * TileSize;
+            for (int i = boxes.Count - 1; i >= 0; i--)
+            {
+                if (boxes[i].x >= left && boxes[i].x < right && boxes[i].y >= top && boxes[i].y < bottom)
+                {
+                    boxes.RemoveAt(i);
+                }
+            }
+        }
+
+        private static void AddBox(List<Box> boxes, Box box)
+        {
+            if (box != null)
+            {
+                boxes.Add(box);
             }
         }
 

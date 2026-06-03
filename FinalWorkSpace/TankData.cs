@@ -330,24 +330,32 @@ namespace Peace_of_Tanks
             }
         }
 
-        public static void RewardExp(GameMode mode, int rank)
+        public static int CalculateRewardExp(GameMode mode, int rank)
         {
-            int exp = 0;
             switch (mode)
             {
+                case GameMode.SinglePlayer:
+                    return 10;
                 case GameMode.TwoPlayer:
-                    exp = rank == 1 ? 15 : 10;
-                    break;
+                    return rank == 1 ? 15 : 10;
                 case GameMode.ThreePlayer:
-                    exp = rank == 1 ? 15 : (rank == 2 ? 10 : 5);
-                    break;
+                    return rank == 1 ? 15 : (rank == 2 ? 10 : 5);
+                default:
+                    return 0;
             }
+        }
+
+        public static int RewardExp(GameMode mode, int rank)
+        {
+            int exp = CalculateRewardExp(mode, rank);
 
             if (exp > 0)
             {
                 CurrentPlayer.AddExp(exp);
                 SaveData();
             }
+
+            return exp;
         }
 
         public static void SyncWithServer()

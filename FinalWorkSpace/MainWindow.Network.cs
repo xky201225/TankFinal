@@ -615,7 +615,7 @@ namespace Peace_of_Tanks
                     HitPoints = enemies[i].hitpoints,
                     Active = true,
                     Kind = 3,
-                    TankType = (int)TankType.Green
+                    TankType = (int)enemies[i].TankType
                 });
             }
 
@@ -846,6 +846,27 @@ namespace Peace_of_Tanks
             var player2Images = TankResourceLoader.GetPlayerTankImages(networkPlayer2TankType);
             player1.SetImages(player1Images.Item1, player1Images.Item2);
             player2.SetImages(player2Images.Item1, player2Images.Item2);
+
+            ApplyTankStats(player1, networkPlayer1TankType, true);
+            ApplyTankStats(player2, networkPlayer2TankType, false);
+        }
+
+        private void ApplyTankStats(PlayerTank tank, TankType tankType, bool useLocalProgress)
+        {
+            TankConfig config = TankConfigs.GetConfig(tankType);
+            int level = 1;
+            if (useLocalProgress)
+            {
+                PlayerTankData tankData;
+                if (DataManager.CurrentPlayer.Tanks.TryGetValue(tankType, out tankData))
+                {
+                    level = tankData.Level;
+                }
+            }
+
+            tank.maxHitpoints = config.GetHealthAtLevel(level);
+            tank.hitpoints = tank.maxHitpoints;
+            tank.attack = config.GetAttackAtLevel(level);
         }
 
         private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, int direction)
@@ -930,8 +951,8 @@ namespace Peace_of_Tanks
             player1.y = -100;
             player2.x = -50;
             player2.y = -50;
-            player1.hitpoints = 1;
-            player2.hitpoints = 1;
+            player1.hitpoints = player1.maxHitpoints;
+            player2.hitpoints = player2.maxHitpoints;
             player1.message.clear();
             player2.message.clear();
             remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = false;

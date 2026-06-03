@@ -534,7 +534,7 @@ namespace Peace_of_Tanks
                 Size = new Size(420, 420),
                 Location = new Point(735, 160),
                 BackColor = Color.FromArgb(14, 24, 36),
-                Map = systemMaps[0],
+                Map = CreatePreviewMap(systemMaps[0], false),
                 Editable = false,
                 SelectedTile = MapTileType.Wall
             };
@@ -560,8 +560,16 @@ namespace Peace_of_Tanks
             {
                 bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
                 int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                mapPreview.Map = custom ? customMap : systemMaps[selectedIndex];
+                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], battleRule.SelectedIndex == 1);
                 mapPreview.Editable = custom;
+                mapPreview.Invalidate();
+            };
+
+            battleRule.SelectedIndexChanged += (s, e) =>
+            {
+                bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
+                int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
+                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], battleRule.SelectedIndex == 1);
                 mapPreview.Invalidate();
             };
 
@@ -595,6 +603,17 @@ namespace Peace_of_Tanks
             pageControls.Add(panel);
             pageControls.Add(CreateBackButton());
             AddPageControls();
+        }
+
+        private static GameMapConfig CreatePreviewMap(GameMapConfig map, bool baseDefense)
+        {
+            GameMapConfig preview = BattleMapFactory.CloneMap(map);
+            if (baseDefense)
+            {
+                BattleMapFactory.AddBaseDefenseTiles(preview);
+            }
+
+            return preview;
         }
 
         private void ShowSinglePlayerSetupPage()
@@ -854,6 +873,7 @@ namespace Peace_of_Tanks
                 StartImmediately = true,
                 UseNetwork = false,
                 Difficulty = difficulty,
+                BattleRule = BattleRuleMode.BaseDefense,
                 MapConfig = mapConfig
             };
             DialogResult = DialogResult.OK;
