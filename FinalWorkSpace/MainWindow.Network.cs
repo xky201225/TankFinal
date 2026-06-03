@@ -269,8 +269,8 @@ namespace Peace_of_Tanks
 
             if (line == "PEER_LEFT")
             {
-                MessageBox.Show(this, "另一名玩家已离线，联机会话结束。", "联机结束", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ResetToMainMenuFromNetwork(false);
+                SettlePeerEliminated();
+                return;
             }
         }
 
@@ -301,9 +301,49 @@ namespace Peace_of_Tanks
 
             if (networkWaiting || networkSessionStarted || networkMode)
             {
-                MessageBox.Show(this, message, "网络连接", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                ResetToMainMenuFromNetwork(false);
+                if (networkSessionStarted)
+                {
+                    SettlePeerEliminated();
+                }
+                else
+                {
+                    MessageBox.Show(this, message, "网络连接", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ResetToMainMenuFromNetwork(false);
+                }
             }
+        }
+
+        private void SettlePeerEliminated()
+        {
+            if (settlementShown)
+            {
+                return;
+            }
+
+            timer1.Enabled = false;
+            TimerPause.Enabled = false;
+
+            if (IsNetworkHost)
+            {
+                secondPlayer = false;
+                player2.x = player2.y = -50;
+                player2Deaths++;
+                player1Kills++;
+            }
+            else if (IsNetworkGuest)
+            {
+                firstPlayer = false;
+                player1.x = player1.y = -100;
+                player1Deaths++;
+                player2Kills++;
+            }
+
+            networkStatusLabel.Text = "另一名玩家已退出，本局按对方淘汰结算。";
+            UpdateNetworkUiVisibility();
+
+            suppressDisconnectMessage = true;
+            CloseNetworkConnection();
+            ShowSettlementPage(BuildSettlementResults());
         }
 
         private void StartNetworkSession(bool isHost)
@@ -574,7 +614,8 @@ namespace Peace_of_Tanks
                     Direction = enemies[i].direction,
                     HitPoints = enemies[i].hitpoints,
                     Active = true,
-                    Kind = 3
+                    Kind = 3,
+                    TankType = (int)TankType.Green
                 });
             }
 
@@ -662,7 +703,7 @@ namespace Peace_of_Tanks
 
             for (int i = 0; i < snapshot.Enemies.Count; i++)
             {
-                DrawRotatedImage(grMemory, Peace_of_Tanks.Properties.Resources.enemy11,
+                DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Enemies[i]),
                     snapshot.Enemies[i].X, snapshot.Enemies[i].Y, 50, 50, snapshot.Enemies[i].Direction);
             }
 

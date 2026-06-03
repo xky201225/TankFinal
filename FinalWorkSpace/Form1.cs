@@ -186,29 +186,10 @@ namespace Peace_of_Tanks
             }
             else
             {
-                // 游戏中按 ESC 键返回主菜单
+                // 游戏中按 ESC 键退出当前对局
                 if (e.KeyCode == Keys.Escape)
                 {
-                    modeMenu = 0;
-                    timer1.Enabled = false;
-
-                    // 清理游戏状态
-                    for (int i = 0; i < enemies.Count; i++)
-                        MoveEnemy -= enemies[i].Move;
-                    enemies.Clear();
-                    bullets.Clear();
-                    animations.Clear();
-
-                    if (firstPlayer) MovePlayer1 -= player1.Move;
-                    if (secondPlayer) MovePlayer2 -= player2.Move;
-
-                    firstPlayer = true;
-                    secondPlayer = false;
-
-                    grMemory.DrawImage(BackgroundImage, 0, 0);
-                    grMain.DrawImage(BackgroundImage, 0, 0);
-
-                    MenuWorking();
+                    HandleEscapeExitBattle();
                     return;
                 }
 
@@ -802,7 +783,8 @@ namespace Peace_of_Tanks
                     Name = networkMode || currentGameMode != GameMode.SinglePlayer ? "玩家1" : "己方",
                     Damage = player1Damage,
                     Kills = player1Kills,
-                    Deaths = player1Deaths
+                    Deaths = player1Deaths,
+                    IsActive = firstPlayer
                 }
             };
 
@@ -813,15 +795,28 @@ namespace Peace_of_Tanks
                     Name = "玩家2",
                     Damage = player2Damage,
                     Kills = player2Kills,
-                    Deaths = player2Deaths
+                    Deaths = player2Deaths,
+                    IsActive = secondPlayer
                 });
             }
 
-            results = results
-                .OrderByDescending(r => r.Kills)
-                .ThenByDescending(r => r.Damage)
-                .ThenBy(r => r.Deaths)
-                .ToList();
+            if (launchOptions != null && launchOptions.BattleRule == BattleRuleMode.FreeBattle)
+            {
+                results = results
+                    .OrderByDescending(r => r.Kills)
+                    .ThenByDescending(r => r.Damage)
+                    .ThenBy(r => r.Deaths)
+                    .ToList();
+            }
+            else
+            {
+                results = results
+                    .OrderByDescending(r => r.IsActive)
+                    .ThenByDescending(r => r.Kills)
+                    .ThenByDescending(r => r.Damage)
+                    .ThenBy(r => r.Deaths)
+                    .ToList();
+            }
 
             for (int i = 0; i < results.Count; i++)
             {
@@ -829,6 +824,40 @@ namespace Peace_of_Tanks
             }
 
             return results;
+        }
+
+        private int CountActiveNetworkPlayers()
+        {
+            int activePlayers = 0;
+            if (firstPlayer)
+            {
+                activePlayers++;
+            }
+
+            if (secondPlayer)
+            {
+                activePlayers++;
+            }
+
+            return activePlayers;
+        }
+
+        private void HandleEscapeExitBattle()
+        {
+            DialogResult result = MessageBox.Show(this, "确定要退出当前对局吗？", "退出对局", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result != DialogResult.Yes)
+            {
+                return;
+            }
+
+            if (networkMode)
+            {
+                returnToLobby = true;
+                Close();
+                return;
+            }
+
+            ShowSettlementPage(BuildSettlementResults());
         }
 
         private void ShowSettlementPage(List<PlayerResultSnapshot> results)
@@ -1611,9 +1640,12 @@ namespace Peace_of_Tanks
             bool freeBattleFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.FreeBattle && (player1Kills >= 15 || player2Kills >= 15);
             bool baseDefenseFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.BaseDefense && baseDestroyed;
             bool singlePlayerCleared = currentGameMode == GameMode.SinglePlayer && setting.countEnemies <= 0 && enemies.Count == 0;
+            bool networkLastPlayerStanding = networkMode && CountActiveNetworkPlayers() <= 1;
 
-            if ((setting.lifesPlayer1 == 0 && !setting.twoPlayer) || ((setting.lifesPlayer2 == 0  && setting.lifesPlayer1 == 0) && setting.twoPlayer)
-                || freeBattleFinished || baseDefenseFinished
+            bool lifeLimitFinished = !networkMode && ((setting.lifesPlayer1 == 0 && !setting.twoPlayer) || ((setting.lifesPlayer2 == 0  && setting.lifesPlayer1 == 0) && setting.twoPlayer));
+
+            if (lifeLimitFinished
+                || freeBattleFinished || baseDefenseFinished || networkLastPlayerStanding
                 || singlePlayerCleared)
             {
                 if (!singlePlayerCleared)
@@ -1738,13 +1770,16 @@ namespace Peace_of_Tanks
 
             if (secondPlayer && player2.hitpoints <= 0)  // 褍薪懈褔褌芯卸械薪懈械 胁褌芯褉芯谐芯 懈谐褉芯泻邪
             {
-                setting.lifesPlayer2--;
+                if (!networkMode)
+                {
+                    setting.lifesPlayer2--;
+                }
                 player2Deaths++;
                 AddExplosionEffect(player2.x, player2.y);
 
                 Random RanNum = new Random();
                 int num = RanNum.Next(0, 4);
-                if (setting.lifesPlayer2 > 0)
+                if (networkMode || setting.lifesPlayer2 > 0)
                 {
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player2));
                     player2.x = respawn.X;
@@ -1760,13 +1795,16 @@ namespace Peace_of_Tanks
             }
             if (firstPlayer && player1.hitpoints <= 0) // 褍薪懈褔褌芯卸械薪懈械 锌械褉胁芯谐芯 懈谐褉芯泻邪
             {
-                setting.lifesPlayer1--;
+                if (!networkMode)
+                {
+                    setting.lifesPlayer1--;
+                }
                 player1Deaths++;
                 AddExplosionEffect(player1.x, player1.y);
 
                 Random RanNum = new Random();
                 int num = RanNum.Next(0, 4);
-                if (setting.lifesPlayer1 > 0)
+                if (networkMode || setting.lifesPlayer1 > 0)
                 {
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player1));
                     player1.x = respawn.X;

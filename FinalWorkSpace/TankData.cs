@@ -180,15 +180,27 @@ namespace Peace_of_Tanks
             }
 
             PlayerTankData tank = Tanks[type];
-            if (!tank.CanUpgrade())
+            if (!CanUpgradeTank(type))
             {
                 return false;
             }
 
             int expNeeded = tank.GetExpForNextLevel();
-            tank.CurrentExp -= expNeeded;
+            TotalExp -= expNeeded;
             tank.Level++;
             return true;
+        }
+
+        public bool CanUpgradeTank(TankType type)
+        {
+            if (!Tanks.ContainsKey(type))
+            {
+                return false;
+            }
+
+            PlayerTankData tank = Tanks[type];
+            int expNeeded = tank.GetExpForNextLevel();
+            return tank.IsUnlocked && tank.Level < 5 && expNeeded > 0 && TotalExp >= expNeeded;
         }
 
         public bool UnlockTank(TankType type)
@@ -334,7 +346,6 @@ namespace Peace_of_Tanks
             if (exp > 0)
             {
                 CurrentPlayer.AddExp(exp);
-                CurrentPlayer.AddTankExp(CurrentPlayer.SelectedTank, exp);
                 SaveData();
             }
         }

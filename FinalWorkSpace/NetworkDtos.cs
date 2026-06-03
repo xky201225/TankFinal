@@ -61,6 +61,7 @@ namespace Peace_of_Tanks
         public int Kills;
         public int Deaths;
         public int Rank;
+        public bool IsActive;
     }
 
     [Serializable]

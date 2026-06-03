@@ -708,6 +708,7 @@ namespace Peace_of_Tanks
                 TankImage = GetTankImage(type),
                 TankData = tankData,
                 TankConfig = config,
+                PlayerData = playerData,
                 IsSelected = selectedTank == type,
                 CanUnlock = canUnlock,
                 Size = new Size(250, 175),
@@ -887,7 +888,7 @@ namespace Peace_of_Tanks
                     ServerHost = string.IsNullOrWhiteSpace(host) ? DefaultChatHost : host.Trim(),
                     ServerPort = port,
                     PlayerName = string.IsNullOrWhiteSpace(playerName) ? chatPlayerName : playerName.Trim(),
-                    TankType = TankType.Green,
+                    TankType = selectedTank,
                     Difficulty = difficulty,
                     JoinMode = joinMode,
                     RoomId = roomId ?? string.Empty,
@@ -1292,6 +1293,7 @@ namespace Peace_of_Tanks
             public Image TankImage { get; set; }
             public PlayerTankData TankData { get; set; }
             public TankConfig TankConfig { get; set; }
+            public PlayerData PlayerData { get; set; }
             public bool IsSelected { get; set; }
             public bool CanUnlock { get; set; }
 
@@ -1307,7 +1309,7 @@ namespace Peace_of_Tanks
             protected override void OnMouseMove(MouseEventArgs e)
             {
                 bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
-                bool upgradeEnabled = TankData != null && TankData.IsUnlocked && TankData.CanUpgrade();
+                bool upgradeEnabled = PlayerData != null && PlayerData.CanUpgradeTank(TankType);
                 bool newHoverSelect = selectEnabled && selectRect.Contains(e.Location);
                 bool newHoverUpgrade = upgradeEnabled && upgradeRect.Contains(e.Location);
 
@@ -1334,7 +1336,7 @@ namespace Peace_of_Tanks
             protected override void OnMouseDown(MouseEventArgs e)
             {
                 bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
-                bool upgradeEnabled = TankData != null && TankData.IsUnlocked && TankData.CanUpgrade();
+                bool upgradeEnabled = PlayerData != null && PlayerData.CanUpgradeTank(TankType);
 
                 if (selectEnabled && selectRect.Contains(e.Location))
                 {
@@ -1377,7 +1379,7 @@ namespace Peace_of_Tanks
                     if (TankData != null && TankConfig != null)
                     {
                         stats = TankData.IsUnlocked
-                            ? "等级 " + TankData.Level + "/5\n攻击 " + TankConfig.GetAttackAtLevel(TankData.Level) + "\n生命 " + TankConfig.GetHealthAtLevel(TankData.Level)
+                            ? "等级 " + TankData.Level + "/5\n升级 " + GetUpgradeCostText() + "\n经验 " + (PlayerData != null ? PlayerData.TotalExp : 0)
                             : "未解锁\n需要经验 " + TankConfig.UnlockExp;
                     }
 
@@ -1394,10 +1396,20 @@ namespace Peace_of_Tanks
                 }
 
                 bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
-                bool upgradeEnabled = TankData != null && TankData.IsUnlocked && TankData.CanUpgrade();
+                bool upgradeEnabled = PlayerData != null && PlayerData.CanUpgradeTank(TankType);
                 string selectText = TankData != null && TankData.IsUnlocked ? "选择" : CanUnlock ? "解锁" : "锁定";
                 DrawActionButton(e.Graphics, selectRect, selectText, selectEnabled, hoverSelect);
                 DrawActionButton(e.Graphics, upgradeRect, "升级", upgradeEnabled, hoverUpgrade);
+            }
+
+            private string GetUpgradeCostText()
+            {
+                if (TankData == null || TankData.Level >= 5)
+                {
+                    return "已满级";
+                }
+
+                return TankData.GetExpForNextLevel().ToString();
             }
 
             private static void DrawActionButton(Graphics g, Rectangle bounds, string text, bool enabled, bool hover)
