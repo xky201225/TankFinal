@@ -55,13 +55,13 @@ namespace Peace_of_Tanks
                 lobbyServerPort = DataManager.CurrentServerPort;
                 lobbyServerPromptShown = true;
             }
-            chatPlayerName = string.IsNullOrWhiteSpace(playerData.UserName) ? "鐜╁" + Environment.UserName : playerData.UserName;
+            chatPlayerName = string.IsNullOrWhiteSpace(playerData.UserName) ? "玩家" + Environment.UserName : playerData.UserName;
             InitializeComponent();
         }
 
         private void InitializeComponent()
         {
-            Text = "鍧﹀厠澶у巺";
+            Text = "坦克大厅";
             ClientSize = new Size(1280, 720);
             MinimumSize = new Size(1100, 660);
             StartPosition = FormStartPosition.CenterScreen;
@@ -139,7 +139,7 @@ namespace Peace_of_Tanks
 
             Label titleLabel = new Label
             {
-                Text = "閽㈤搧鎴樼",
+                Text = "和平坦克大战",
                 Font = new Font("Microsoft YaHei UI", 22, FontStyle.Bold),
                 ForeColor = Color.White,
                 BackColor = Color.Transparent,
@@ -172,7 +172,7 @@ namespace Peace_of_Tanks
 
             pageControls.Add(CreateMainButton(
                 "开始游戏",
-                "鍖归厤瀵规垬 >>",
+                "匹配对战 >>",
                 Peace_of_Tanks.Properties.Resources.lobby_icon_match,
                 new Point(24, 150),
                 true,
@@ -188,7 +188,7 @@ namespace Peace_of_Tanks
 
             pageControls.Add(CreateMainButton(
                 "坦克库",
-                "閫夋嫨 / 鍗囩骇 / 瑙ｉ攣 >>",
+                "选择 / 升级 / 解锁 >>",
                 Peace_of_Tanks.Properties.Resources.lobby_icon_tanklib,
                 new Point(24, 360),
                 false,
@@ -213,7 +213,7 @@ namespace Peace_of_Tanks
             lobbyServerPromptShown = true;
             if (chatClient != null && chatClient.IsConnected)
             {
-                SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+                SetChatStatus("聊天服务器已连接");
                 return;
             }
 
@@ -224,7 +224,7 @@ namespace Peace_of_Tanks
         {
             if (chatClient != null && chatClient.IsConnected)
             {
-                SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+                SetChatStatus("聊天服务器已连接");
                 return true;
             }
 
@@ -238,13 +238,13 @@ namespace Peace_of_Tanks
                 dialog.ClientSize = new Size(330, 145);
                 dialog.ShowInTaskbar = false;
 
-                Label hostLabel = new Label { Text = "鏈嶅姟鍣ㄥ湴鍧€", Left = 22, Top = 22, Width = 90, AutoSize = true };
+                Label hostLabel = new Label { Text = "服务器地址", Left = 22, Top = 22, Width = 90, AutoSize = true };
                 TextBox hostText = new TextBox { Left = 120, Top = 18, Width = 180, Text = lobbyServerHost };
-                Label portLabel = new Label { Text = "绔彛", Left = 22, Top = 62, Width = 90, AutoSize = true };
+                Label portLabel = new Label { Text = "端口", Left = 22, Top = 62, Width = 90, AutoSize = true };
                 TextBox portText = new TextBox { Left = 120, Top = 58, Width = 180, Text = lobbyServerPort.ToString() };
 
-                Button okButton = new Button { Text = "纭畾", Left = 120, Top = 100, Width = 80, DialogResult = DialogResult.OK };
-                Button cancelButton = new Button { Text = "鍙栨秷", Left = 220, Top = 100, Width = 80, DialogResult = DialogResult.Cancel };
+                Button okButton = new Button { Text = "确定", Left = 120, Top = 100, Width = 80, DialogResult = DialogResult.OK };
+                Button cancelButton = new Button { Text = "取消", Left = 220, Top = 100, Width = 80, DialogResult = DialogResult.Cancel };
 
                 dialog.Controls.AddRange(new Control[] { hostLabel, hostText, portLabel, portText, okButton, cancelButton });
                 dialog.AcceptButton = okButton;
@@ -298,7 +298,7 @@ namespace Peace_of_Tanks
             if (chatClient != null && chatClient.IsConnected)
             {
                 error = string.Empty;
-                SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+                SetChatStatus("聊天服务器已连接");
                 return true;
             }
 
@@ -312,7 +312,7 @@ namespace Peace_of_Tanks
             bool serverChanged = !string.Equals(lobbyServerHost, targetHost, StringComparison.OrdinalIgnoreCase) || lobbyServerPort != port;
             if (!serverChanged && chatClient != null && chatClient.IsConnected)
             {
-                SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+                SetChatStatus("聊天服务器已连接");
                 return true;
             }
 
@@ -388,7 +388,7 @@ namespace Peace_of_Tanks
 
             chatStatusLabel = new Label
             {
-                Text = "鑱婂ぉ鏈嶅姟鍣ㄦ湭杩炴帴",
+                Text = "聊天服务器未连接",
                 Font = new Font("Microsoft YaHei UI", 8, FontStyle.Regular),
                 ForeColor = Color.FromArgb(170, 180, 195),
                 BackColor = Color.FromArgb(14, 24, 36),
@@ -449,8 +449,8 @@ namespace Peace_of_Tanks
 
             pageControls.Add(new HudHeader
             {
-                Title = "鍖归厤妯″紡",
-                Subtitle = "鍒涘缓鎴块棿銆佹悳绱㈢己浜烘埧闂达紝鎴栬緭鍏ユ埧闂村彿鍔犲叆",
+                Title = "匹配模式",
+                Subtitle = "创建房间、搜索缺人房间，或输入房间号加入",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
@@ -509,22 +509,22 @@ namespace Peace_of_Tanks
 
             pageControls.Add(new HudHeader
             {
-                Title = "鍒涘缓鎴块棿",
+                Title = "创建房间",
                 Subtitle = "设置房间信息后直接进入等待页面",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
 
             HudPanel panel = new HudPanel { Size = new Size(420, 470), Location = new Point(285, 160), BackColor = Color.FromArgb(14, 24, 36) };
-            TextBox host = AddField(panel, "鏈嶅姟鍣ㄥ湴鍧€", lobbyServerHost, 24, 24);
-            TextBox port = AddField(panel, "绔彛", lobbyServerPort.ToString(), 230, 24);
-            TextBox name = AddField(panel, "鐜╁鍚嶇О", chatPlayerName, 24, 92);
+            TextBox host = AddField(panel, "服务器地址", lobbyServerHost, 24, 24);
+            TextBox port = AddField(panel, "端口", lobbyServerPort.ToString(), 230, 24);
+            TextBox name = AddField(panel, "玩家名称", chatPlayerName, 24, 92);
             TextBox roomId = AddField(panel, "房间号", "ROOM-" + DateTime.Now.ToString("HHmm"), 230, 92);
 
-            ComboBox playerCount = AddCombo(panel, "鍖归厤浜烘暟", new object[] { "鍙屼汉妯″紡", "涓変汉妯″紡" }, 24, 164);
-            ComboBox battleRule = AddCombo(panel, "瀵规姉妯″紡", new object[] { "鑷敱鎴樺満", "闃靛湴闃插畧" }, 230, 164);
+            ComboBox playerCount = AddCombo(panel, "匹配人数", new object[] { "双人模式", "三人模式" }, 24, 164);
+            ComboBox battleRule = AddCombo(panel, "对抗模式", new object[] { "自由战场", "阵地防守" }, 230, 164);
             ComboBox difficulty = AddCombo(panel, "难度", new object[] { "简单", "中等", "困难" }, 24, 236);
-            ComboBox mapSelect = AddCombo(panel, "鍦板浘", CreateSystemMapItems(true), 230, 236);
+            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(true), 230, 236);
 
             GameMapConfig[] systemMaps = CreateSystemMaps();
             GameMapConfig customMap = BattleMapFactory.CreateEmpty("自定义地图");
@@ -539,13 +539,13 @@ namespace Peace_of_Tanks
                 SelectedTile = MapTileType.Wall
             };
 
-            Label previewTitle = CreatePanelLabel("鍦板浘棰勮", new Point(735, 132), 12, Color.White, FontStyle.Bold);
+            Label previewTitle = CreatePanelLabel("地图预览", new Point(735, 132), 12, Color.White, FontStyle.Bold);
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
             HudPanel materialPanel = new HudPanel { Size = new Size(420, 64), Location = new Point(735, 592), BackColor = Color.FromArgb(14, 24, 36) };
             MapTileType[] materials = new[] { MapTileType.Empty, MapTileType.Wall, MapTileType.Water, MapTileType.Grass, MapTileType.Iron, MapTileType.Base };
-            string[] materialNames = new[] { "绌哄湴", "鐮栧", "姘村煙", "鑽変笡", "閽㈤搧", "闃靛湴" };
+            string[] materialNames = new[] { "空地", "砖墙", "水域", "草丛", "钢铁", "阵地" };
             for (int i = 0; i < materials.Length; i++)
             {
                 Button materialButton = CreateSmallButton(materialNames[i], new Point(10 + i * 66, 18), true);
@@ -597,7 +597,7 @@ namespace Peace_of_Tanks
             };
             panel.Controls.Add(create);
 
-            Label hint = CreatePanelLabel("鑷敱鎴樺満锛氬厛杈惧埌 15 鍑绘潃鑾疯儨\n闃靛湴闃插畧锛氶樀鍦拌姣佸垯娣樻卑", new Point(24, 390), 9, Color.FromArgb(180, 195, 210), FontStyle.Regular);
+            Label hint = CreatePanelLabel("自由战场：先达到 15 击杀获胜\n阵地防守：阵地被毁则淘汰", new Point(24, 390), 9, Color.FromArgb(180, 195, 210), FontStyle.Regular);
             panel.Controls.Add(hint);
 
             pageControls.Add(panel);
@@ -623,14 +623,14 @@ namespace Peace_of_Tanks
 
             pageControls.Add(new HudHeader
             {
-                Title = "鍗曚汉鎸戞垬",
-                Subtitle = "鍏堥€夋嫨鎴樺満鍦板浘锛屽啀閫夋嫨鎸戞垬闅惧害",
+                Title = "单人挑战",
+                Subtitle = "先选择战场地图，再选择挑战难度",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
 
             HudPanel panel = new HudPanel { Size = new Size(420, 330), Location = new Point(285, 180), BackColor = Color.FromArgb(14, 24, 36) };
-            ComboBox mapSelect = AddCombo(panel, "鍦板浘", CreateSystemMapItems(false), 24, 32);
+            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(false), 24, 32);
             ComboBox difficulty = AddCombo(panel, "模式", new object[] { "简单", "中等", "困难" }, 230, 32);
 
             Label hint = CreatePanelLabel("简单：场上保持 3 辆敌方坦克\n中等：场上保持 5 辆敌方坦克\n困难：场上保持 8 辆敌方坦克", new Point(24, 112), 10, Color.FromArgb(190, 205, 225), FontStyle.Regular);
@@ -647,7 +647,7 @@ namespace Peace_of_Tanks
                 SelectedTile = MapTileType.Wall
             };
 
-            Label previewTitle = CreatePanelLabel("鍦板浘棰勮", new Point(735, 132), 12, Color.White, FontStyle.Bold);
+            Label previewTitle = CreatePanelLabel("地图预览", new Point(735, 132), 12, Color.White, FontStyle.Bold);
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
@@ -838,7 +838,7 @@ namespace Peace_of_Tanks
         {
             HudMainButton button = new HudMainButton
             {
-                Title = "杩斿洖澶у巺",
+                Title = "返回大厅",
                 Subtitle = "回到主界面",
                 Icon = Peace_of_Tanks.Properties.Resources.lobby_icon_match,
                 Primary = false,
@@ -860,7 +860,7 @@ namespace Peace_of_Tanks
 
         private void RefreshTopExp()
         {
-            expLabel.Text = "缁忛獙鍊?" + playerData.TotalExp;
+            expLabel.Text = "经验值 " + playerData.TotalExp;
         }
 
         private void StartSinglePlayer(GameMapConfig mapConfig, NetworkDifficulty difficulty)
@@ -932,7 +932,7 @@ namespace Peace_of_Tanks
             error = string.Empty;
             if (chatClient != null && chatClient.IsConnected)
             {
-                SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+                SetChatStatus("聊天服务器已连接");
                 return true;
             }
 
@@ -948,7 +948,7 @@ namespace Peace_of_Tanks
                 return false;
             }
 
-            SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡杩炴帴");
+            SetChatStatus("聊天服务器已连接");
             return true;
         }
 
@@ -1025,7 +1025,7 @@ namespace Peace_of_Tanks
             }
 
             CloseLobbyChat();
-            SetChatStatus("鑱婂ぉ鏈嶅姟鍣ㄥ凡鏂紑");
+            SetChatStatus("聊天服务器已断开");
         }
 
         private void CloseLobbyChat()
@@ -1095,12 +1095,12 @@ namespace Peace_of_Tanks
         {
             switch (type)
             {
-                case TankType.Green: return "缁胯壊鍧﹀厠";
-                case TankType.Yellow: return "榛勮壊鍧﹀厠";
-                case TankType.Blue: return "钃濊壊鍧﹀厠";
-                case TankType.Red: return "绾㈣壊鍧﹀厠";
-                case TankType.Purple: return "绱壊鍧﹀厠";
-                default: return "鏈煡鍧﹀厠";
+                case TankType.Green: return "绿色坦克";
+                case TankType.Yellow: return "黄色坦克";
+                case TankType.Blue: return "蓝色坦克";
+                case TankType.Red: return "红色坦克";
+                case TankType.Purple: return "紫色坦克";
+                default: return "未知坦克";
             }
         }
 
@@ -1285,7 +1285,7 @@ namespace Peace_of_Tanks
                 using (Font font = new Font("Microsoft YaHei UI", 9, FontStyle.Bold))
                 using (SolidBrush brush = new SolidBrush(Editable ? Color.FromArgb(255, 231, 145) : Color.FromArgb(175, 190, 210)))
                 {
-                    e.Graphics.DrawString(Editable ? "鑷畾涔夛細鎷栨嫿鏀剧疆鏉愯川" : "绯荤粺鍦板浘棰勮", font, brush, 16, Height - 28);
+                    e.Graphics.DrawString(Editable ? "自定义：拖拽设置材质" : "系统地图预览", font, brush, 16, Height - 28);
                 }
             }
 
@@ -1428,7 +1428,7 @@ namespace Peace_of_Tanks
                     using (Font selectedFont = new Font("Microsoft YaHei UI", 8, FontStyle.Bold))
                     using (SolidBrush selectedBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
                     {
-                        e.Graphics.DrawString("宸查€夋嫨", selectedFont, selectedBrush, 18, 98);
+                        e.Graphics.DrawString("已选择", selectedFont, selectedBrush, 18, 98);
                     }
                 }
 

@@ -1588,7 +1588,7 @@ namespace Peace_of_Tanks
                         {
                             AddHitEffect(enemies[j].x, enemies[j].y);
                             TrackDamage(bullets[i].who, bullets[i].damage);
-                            enemies[j].hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
+                            enemies[j].hitpoints -= bullets[i].damage;  // 使用子弹伤害
                             if (enemies[j].hitpoints <= 0)
                             {
                                 RegisterEnemyKill(bullets[i].who);
@@ -1611,7 +1611,7 @@ namespace Peace_of_Tanks
 
                     AddHitEffect(player1.x, player1.y);
                     TrackDamage(bullets[i].who, bullets[i].damage);
-                    player1.hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
+                    player1.hitpoints -= bullets[i].damage;  // 使用子弹伤害
                     if (player1.hitpoints <= 0 && bullets[i].who == 2)
                     {
                         player2Kills++;
@@ -1630,7 +1630,7 @@ namespace Peace_of_Tanks
 
                     AddHitEffect(player2.x, player2.y);
                     TrackDamage(bullets[i].who, bullets[i].damage);
-                    player2.hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
+                    player2.hitpoints -= bullets[i].damage;  // 使用子弹伤害
                     if (player2.hitpoints <= 0 && bullets[i].who == 1)
                     {
                         player1Kills++;
@@ -1913,7 +1913,7 @@ namespace Peace_of_Tanks
             grMemory = Graphics.FromImage(backgroundMemory);
             grMemory.DrawImage(backgroundMain, 0, 0);
 
-            // 浣跨敤閫変腑鐨勫潶鍏嬬被鍨嬪垱寤虹帺瀹跺潶鍏?
+            // 使用选中的坦克类型创建玩家坦克
             var playerData = DataManager.CurrentPlayer;
             var playerTankData = playerData.Tanks[selectedTankType];
             var config = TankConfigs.GetConfig(selectedTankType);
