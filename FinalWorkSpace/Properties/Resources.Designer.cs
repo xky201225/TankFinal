@@ -433,6 +433,16 @@ namespace Peace_of_Tanks.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap base_tile {
+            get {
+                object obj = ResourceManager.GetObject("base_tile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
         internal static System.Drawing.Bitmap PaoDan {
             get {
                 object obj = ResourceManager.GetObject("PaoDan", resourceCulture);
@@ -566,6 +576,34 @@ namespace Peace_of_Tanks.Properties {
         internal static System.Drawing.Bitmap Zi {
             get {
                 object obj = ResourceManager.GetObject("Zi", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        internal static System.Drawing.Bitmap lobby_icon_match {
+            get {
+                object obj = ResourceManager.GetObject("lobby_icon_match", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        internal static System.Drawing.Bitmap lobby_icon_solo {
+            get {
+                object obj = ResourceManager.GetObject("lobby_icon_solo", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        internal static System.Drawing.Bitmap lobby_icon_tanklib {
+            get {
+                object obj = ResourceManager.GetObject("lobby_icon_tanklib", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        internal static System.Drawing.Bitmap lobby_icon_people {
+            get {
+                object obj = ResourceManager.GetObject("lobby_icon_people", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }

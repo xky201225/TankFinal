@@ -60,4 +60,13 @@ namespace Peace_of_Tanks
             pictureBox = ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.iron;
         }
     }
+
+    class Box_Base : Box
+    {
+        public Box_Base(int x, int y) : base(x, y)
+        {
+            hitPoint = 5;
+            pictureBox = ResourceManager.TerrainBase ?? Peace_of_Tanks.Properties.Resources.base_tile;
+        }
+    }
 }

@@ -23,22 +23,16 @@ namespace Peace_of_Tanks
             // 加载玩家数据
             DataManager.LoadData();
 
-            // 游戏循环：开场动画 -> 大厅 -> 游戏 -> 大厅
+            // 游戏循环：大厅 -> 游戏 -> 大厅
             while (true)
             {
-                GameLobby lobby;
-
-                // 首次启动显示开场动画
-                SplashScreen splash = new SplashScreen();
-                splash.ShowDialog();
-                lobby = splash.GetLobby();
-
-                DialogResult result = splash.LobbyResult;
+                GameLobby lobby = new GameLobby();
+                DialogResult result = lobby.ShowDialog();
 
                 if (result == DialogResult.OK)
                 {
                     // 玩家选择了坦克和模式，启动游戏
-                    MainWindow mainWindow = new MainWindow(lobby.SelectedMode, lobby.SelectedTank);
+                    MainWindow mainWindow = new MainWindow(lobby.LaunchOptions);
                     mainWindow.ShowDialog();
 
                     // 检查是否要返回大厅

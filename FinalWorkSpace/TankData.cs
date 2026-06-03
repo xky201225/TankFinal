@@ -212,6 +212,23 @@ namespace Peace_of_Tanks
         }
 
         // 添加坦克经验（用于坦克升级）
+        public bool UnlockTank(TankType type)
+        {
+            if (!Tanks.ContainsKey(type))
+                return false;
+
+            var tank = Tanks[type];
+            if (tank.IsUnlocked)
+                return false;
+
+            var config = TankConfigs.GetConfig(type);
+            if (TotalExp < config.UnlockExp)
+                return false;
+
+            tank.IsUnlocked = true;
+            return true;
+        }
+
         public void AddTankExp(TankType type, int exp)
         {
             if (Tanks.ContainsKey(type) && Tanks[type].IsUnlocked)

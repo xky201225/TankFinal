@@ -411,7 +411,7 @@ namespace Peace_of_Tanks
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(2400, 2400);  // 扩大到3倍战场大小
+            this.ClientSize = new System.Drawing.Size(800, 800);
             this.Controls.Add(this.RichRules);
             this.Controls.Add(this.RichAbout);
             this.Controls.Add(this.PicBackToLobby);

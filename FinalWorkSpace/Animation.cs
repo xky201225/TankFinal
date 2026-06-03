@@ -41,22 +41,18 @@ namespace Peace_of_Tanks
         {
             if (message.type == 0)
             {
-                // 击中效果：Ji1 -> Ji2 -> Ji3，共3帧，每帧5个tick
-                // delay从15递减到0
-                if (message.delay == 15) picture = ResourceManager.HitEffect1 ?? boom1;
-                else if (message.delay == 10) picture = ResourceManager.HitEffect2 ?? boom2;
-                else if (message.delay == 5) picture = ResourceManager.HitEffect3 ?? boom3;
+                if (message.delay >= 3) picture = ResourceManager.HitEffect1 ?? boom1;
+                else if (message.delay == 2) picture = ResourceManager.HitEffect2 ?? boom2;
+                else if (message.delay == 1) picture = ResourceManager.HitEffect3 ?? boom3;
                 message.delay--;
             }
             else if (message.type == 1)
             {
-                // 爆炸效果：Bao1 -> Bao2 -> Bao3 -> Bao4 -> Bao5，共5帧，每帧4个tick
-                // delay从20递减到0
-                if (message.delay == 20) picture = ResourceManager.ExplosionEffect1 ?? megaBoom1;
-                else if (message.delay == 16) picture = ResourceManager.ExplosionEffect2 ?? megaBoom1;
-                else if (message.delay == 12) picture = ResourceManager.ExplosionEffect3 ?? megaBoom2;
-                else if (message.delay == 8) picture = ResourceManager.ExplosionEffect4 ?? megaBoom2;
-                else if (message.delay == 4) picture = ResourceManager.ExplosionEffect5 ?? megaBoom2;
+                if (message.delay >= 5) picture = ResourceManager.ExplosionEffect1 ?? megaBoom1;
+                else if (message.delay == 4) picture = ResourceManager.ExplosionEffect2 ?? megaBoom1;
+                else if (message.delay == 3) picture = ResourceManager.ExplosionEffect3 ?? megaBoom2;
+                else if (message.delay == 2) picture = ResourceManager.ExplosionEffect4 ?? megaBoom2;
+                else if (message.delay == 1) picture = ResourceManager.ExplosionEffect5 ?? megaBoom2;
                 message.delay--;
             }
         }

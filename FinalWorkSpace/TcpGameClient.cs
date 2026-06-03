@@ -24,6 +24,22 @@ namespace Peace_of_Tanks
 
         public bool Connect(string host, int port, string playerName, out string error)
         {
+            return Connect(host, port, playerName, NetworkJoinMode.Search, string.Empty, out error);
+        }
+
+        public bool Connect(string host, int port, string playerName, NetworkJoinMode joinMode, string roomId, out string error)
+        {
+            string helloLine = "JOIN|" + Sanitize(playerName) + "|" + joinMode + "|" + Sanitize(roomId);
+            return ConnectCore(host, port, helloLine, out error);
+        }
+
+        public bool ConnectLobby(string host, int port, string playerName, out string error)
+        {
+            return ConnectCore(host, port, "LOBBY|" + Sanitize(playerName), out error);
+        }
+
+        private bool ConnectCore(string host, int port, string helloLine, out string error)
+        {
             error = string.Empty;
             try
             {
@@ -36,7 +52,7 @@ namespace Peace_of_Tanks
                     AutoFlush = true
                 };
 
-                SendLine("JOIN|" + Sanitize(playerName));
+                SendLine(helloLine);
 
                 receiveThread = new Thread(ReadLoop)
                 {

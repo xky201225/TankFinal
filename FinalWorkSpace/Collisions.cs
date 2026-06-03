@@ -13,7 +13,7 @@ namespace Peace_of_Tanks
         {
             int s_bullet = 10, s_box = 25;
             if ((bullet.x <= mainWindow.ClientRectangle.Left) || (bullet.y <= mainWindow.ClientRectangle.Top)
-                || (bullet.x + 10 >= mainWindow.ClientRectangle.Right) || (bullet.y + 10 >= 750)
+                || (bullet.x + 10 >= mainWindow.ClientRectangle.Right) || (bullet.y + 10 >= mainWindow.ClientRectangle.Bottom)
                 )
                 return 1;//касание  границ
             else
@@ -42,7 +42,7 @@ namespace Peace_of_Tanks
                 !(box is Box_Green)
                 
                 || (x < MainWindow.ClientRectangle.Left) || (y < MainWindow.ClientRectangle.Top) || (x + s_tank > MainWindow.ClientRectangle.Right) || 
-                (y + s_tank > 750))
+                (y + s_tank > MainWindow.ClientRectangle.Bottom))
                 {
                     return true;
                 }

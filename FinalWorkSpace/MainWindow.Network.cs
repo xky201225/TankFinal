@@ -36,8 +36,8 @@ namespace Peace_of_Tanks
             networkHintLabel = new Label
             {
                 AutoSize = true,
-                BackColor = Color.Black,
-                ForeColor = Color.White,
+                BackColor = Color.FromArgb(20, 30, 44),
+                ForeColor = Color.FromArgb(230, 240, 255),
                 Location = new Point(18, 15),
                 Text = "按 N 开始网络联机，输入同一服务器地址即可匹配",
                 Visible = true
@@ -46,10 +46,12 @@ namespace Peace_of_Tanks
             networkStatusLabel = new Label
             {
                 AutoSize = false,
-                BackColor = Color.Black,
-                ForeColor = Color.LightGreen,
-                Location = new Point(18, 40),
-                Size = new Size(760, 40),
+                BackColor = Color.FromArgb(20, 30, 44),
+                ForeColor = Color.FromArgb(255, 231, 145),
+                Font = new Font("Microsoft YaHei UI", 10, FontStyle.Bold),
+                Location = new Point(18, 18),
+                Padding = new Padding(12, 8, 12, 8),
+                Size = new Size(760, 42),
                 Text = string.Empty,
                 Visible = false
             };
@@ -67,7 +69,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            networkHintLabel.Visible = modeMenu == 0 && !networkWaiting && !networkSessionStarted;
+            networkHintLabel.Visible = modeMenu == 0 && !networkWaiting && !networkSessionStarted && (launchOptions == null || !launchOptions.StartImmediately);
             networkStatusLabel.Visible = networkWaiting || (networkSessionStarted && !string.IsNullOrEmpty(networkStatusLabel.Text));
             networkHintLabel.BringToFront();
             networkStatusLabel.BringToFront();
@@ -107,6 +109,11 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            BeginNetworkConnect(config);
+        }
+
+        private void BeginNetworkConnect(NetworkConfig config)
+        {
             CloseNetworkConnection();
 
             networkClient = new TcpGameClient();
@@ -114,7 +121,7 @@ namespace Peace_of_Tanks
             networkClient.Disconnected += NetworkClient_Disconnected;
 
             string error;
-            if (!networkClient.Connect(config.ServerHost, config.ServerPort, config.PlayerName, out error))
+            if (!networkClient.Connect(config.ServerHost, config.ServerPort, config.PlayerName, config.JoinMode, config.RoomId, out error))
             {
                 MessageBox.Show(this, "连接服务器失败：" + error, "联机失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 CloseNetworkConnection();
@@ -154,9 +161,36 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            if (line.StartsWith("WAITING|", StringComparison.Ordinal))
+            {
+                string roomId = line.Substring("WAITING|".Length);
+                networkStatusLabel.Text = "房间 " + roomId + " 已创建，等待另一名玩家加入...";
+                UpdateNetworkUiVisibility();
+                return;
+            }
+
+            if (line.StartsWith("ROOM_NOT_FOUND|", StringComparison.Ordinal))
+            {
+                string roomId = line.Substring("ROOM_NOT_FOUND|".Length);
+                MessageBox.Show(this, "没有找到房间：" + roomId, "加入房间", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ResetToMainMenuFromNetwork(false);
+                Close();
+                return;
+            }
+
+            if (line.StartsWith("ROOM_EXISTS|", StringComparison.Ordinal))
+            {
+                string roomId = line.Substring("ROOM_EXISTS|".Length);
+                MessageBox.Show(this, "房间号已存在：" + roomId, "创建房间", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ResetToMainMenuFromNetwork(false);
+                Close();
+                return;
+            }
+
             if (line.StartsWith("START|", StringComparison.Ordinal))
             {
-                string role = line.Substring("START|".Length);
+                string[] parts = line.Split('|');
+                string role = parts.Length > 1 ? parts[1] : string.Empty;
                 StartNetworkSession(role.Equals("HOST", StringComparison.OrdinalIgnoreCase));
                 return;
             }
@@ -245,8 +279,7 @@ namespace Peace_of_Tanks
                 ApplyDifficultySettings(activeNetworkConfig != null ? activeNetworkConfig.Difficulty : NetworkDifficulty.Easy);
                 setting.twoPlayer = true;
                 networkStatusLabel.Text = "联机已匹配成功，你是主机端，负责同步游戏状态。";
-                modeMenu = 2;
-                MenuWorking();
+                StartBattleDirectly();
             }
             else
             {
@@ -255,8 +288,8 @@ namespace Peace_of_Tanks
                 modeMenu = 8;
                 timer1.Interval = 25;
                 timer1.Enabled = true;
-                grMemory.DrawImage(BackgroundImage, 0, 0);
-                grMain.DrawImage(BackgroundImage, 0, 0);
+                RefreshBattleBackground();
+                grMain.DrawImage(backgroundMemory, 0, 0);
             }
 
             UpdateNetworkUiVisibility();
@@ -268,6 +301,7 @@ namespace Peace_of_Tanks
             {
                 setting.difficulty = 0;
                 setting.countEnemies = 15;
+                activeEnemyLimit = 3;
                 setting.hitPointsEnemy = 1;
                 setting.level = 1;
                 setting.lifesPlayer1 = 3;
@@ -279,10 +313,11 @@ namespace Peace_of_Tanks
                 setting.timeSpawn = 300;
                 setting.pointsForPlayers = 500;
             }
-            else if (difficulty == NetworkDifficulty.Hard)
+            else if (difficulty == NetworkDifficulty.Medium)
             {
                 setting.difficulty = 1;
                 setting.countEnemies = 25;
+                activeEnemyLimit = 5;
                 setting.hitPointsEnemy = 1;
                 setting.level = 1;
                 setting.lifesPlayer1 = 2;
@@ -298,6 +333,7 @@ namespace Peace_of_Tanks
             {
                 setting.difficulty = 2;
                 setting.countEnemies = 50;
+                activeEnemyLimit = 8;
                 setting.hitPointsEnemy = 2;
                 setting.level = 1;
                 setting.lifesPlayer1 = 1;
@@ -432,12 +468,21 @@ namespace Peace_of_Tanks
 
         private void BroadcastSnapshot(bool gameOver)
         {
+            BroadcastSnapshot(gameOver, null);
+        }
+
+        private void BroadcastSnapshot(bool gameOver, List<PlayerResultSnapshot> results)
+        {
             if (!IsNetworkHost || networkClient == null || !networkClient.IsConnected)
             {
                 return;
             }
 
             GameSnapshot snapshot = BuildSnapshot(gameOver);
+            if (results != null)
+            {
+                snapshot.Results = results;
+            }
             string payload = NetworkSerialization.SerializeToBase64(snapshot);
             networkClient.SendLine("STATE|" + payload);
         }
@@ -585,7 +630,8 @@ namespace Peace_of_Tanks
 
             if (snapshot.GameOver)
             {
-                grMemory.DrawImage(gameover, 355, 350, 100, 50);
+                ShowSettlementPage(snapshot.Results);
+                return;
             }
 
             grMain.DrawImage(backgroundMemory, 0, 0);
@@ -680,6 +726,7 @@ namespace Peace_of_Tanks
             PicTank.Visible = false;
             PicRules.Visible = false;
             PicAbout.Visible = false;
+            PicBackToLobby.Visible = false;
             PicButtonEasy.Visible = false;
             PicButtonHard.Visible = false;
             PicButtonReal.Visible = false;
@@ -722,6 +769,7 @@ namespace Peace_of_Tanks
 
             firstPlayer = true;
             secondPlayer = false;
+            ResetMatchStats();
             player1.x = -100;
             player1.y = -100;
             player2.x = -50;
@@ -733,8 +781,8 @@ namespace Peace_of_Tanks
             remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = false;
             guestInputState.Up = guestInputState.Down = guestInputState.Left = guestInputState.Right = guestInputState.Fire = false;
 
-            grMemory.DrawImage(BackgroundImage, 0, 0);
-            grMain.DrawImage(BackgroundImage, 0, 0);
+            RefreshBattleBackground();
+            grMain.DrawImage(backgroundMemory, 0, 0);
         }
 
         private void ResetToMainMenuFromNetwork(bool closeConnection)

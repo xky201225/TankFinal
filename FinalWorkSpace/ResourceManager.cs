@@ -12,6 +12,7 @@ namespace Peace_of_Tanks
         public static Bitmap TerrainWall { get; private set; }
         public static Bitmap TerrainIron { get; private set; }
         public static Bitmap TerrainWater { get; private set; }
+        public static Bitmap TerrainBase { get; private set; }
 
         public static Bitmap Bullet { get; private set; }
 
@@ -35,6 +36,7 @@ namespace Peace_of_Tanks
             TerrainWall = Peace_of_Tanks.Properties.Resources.Qiang;
             TerrainIron = Peace_of_Tanks.Properties.Resources.Tie;
             TerrainWater = Peace_of_Tanks.Properties.Resources.Shui;
+            TerrainBase = Peace_of_Tanks.Properties.Resources.base_tile;
 
             Bullet = Peace_of_Tanks.Properties.Resources.PaoDan;
 

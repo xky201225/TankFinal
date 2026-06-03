@@ -27,26 +27,31 @@ namespace Peace_of_Tanks
             }
         }
 
+        public void SetDefaultSpawnPoints()
+        {
+            masPointsSpawnEnemy[0, 0] = 50;
+            masPointsSpawnEnemy[0, 1] = 380;
+            masPointsSpawnEnemy[1, 0] = 700;
+            masPointsSpawnEnemy[1, 1] = 380;
+            masPointsSpawnEnemy[2, 0] = 380;
+            masPointsSpawnEnemy[2, 1] = 50;
+            masPointsSpawnEnemy[3, 0] = 380;
+            masPointsSpawnEnemy[3, 1] = 700;
+
+            masPointsSpawnPlayers[0, 0] = 50;
+            masPointsSpawnPlayers[0, 1] = 50;
+            masPointsSpawnPlayers[1, 0] = 700;
+            masPointsSpawnPlayers[1, 1] = 50;
+            masPointsSpawnPlayers[2, 0] = 50;
+            masPointsSpawnPlayers[2, 1] = 700;
+            masPointsSpawnPlayers[3, 0] = 700;
+            masPointsSpawnPlayers[3, 1] = 700;
+        }
+
         public void Level1(Form MW, List<Box> boxes)
         {
             // 战场规模扩大到原来的3倍
-            masPointsSpawnEnemy[0, 0] = 0;
-            masPointsSpawnEnemy[0, 1] = 1200;
-            masPointsSpawnEnemy[1, 0] = 2100;
-            masPointsSpawnEnemy[1, 1] = 1200;
-            masPointsSpawnEnemy[2, 0] = 1050;
-            masPointsSpawnEnemy[2, 1] = 0;
-            masPointsSpawnEnemy[3, 0] = 1050;
-            masPointsSpawnEnemy[3, 1] = 2100;
-
-            masPointsSpawnPlayers[0, 0] = 0;
-            masPointsSpawnPlayers[0, 1] = 0;
-            masPointsSpawnPlayers[1, 0] = 2100;
-            masPointsSpawnPlayers[1, 1] = 0;
-            masPointsSpawnPlayers[2, 0] = 0;
-            masPointsSpawnPlayers[2, 1] = 2100;
-            masPointsSpawnPlayers[3, 0] = 2100;
-            masPointsSpawnPlayers[3, 1] = 2100;
+            SetDefaultSpawnPoints();
 
             boxes.Clear();
 

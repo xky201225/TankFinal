@@ -35,7 +35,7 @@ namespace Peace_of_Tanks
                 Width = 170,
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
-            cboDifficulty.Items.AddRange(new object[] { "简单", "困难", "真实" });
+            cboDifficulty.Items.AddRange(new object[] { "简单", "中等", "困难" });
             cboDifficulty.SelectedIndex = 0;
 
             Button btnOk = new Button

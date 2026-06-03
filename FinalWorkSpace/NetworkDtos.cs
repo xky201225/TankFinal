@@ -44,6 +44,16 @@ namespace Peace_of_Tanks
     }
 
     [Serializable]
+    internal class PlayerResultSnapshot
+    {
+        public string Name = string.Empty;
+        public int Damage;
+        public int Kills;
+        public int Deaths;
+        public int Rank;
+    }
+
+    [Serializable]
     internal class GameSnapshot
     {
         public int LivesPlayer1;
@@ -58,21 +68,72 @@ namespace Peace_of_Tanks
         public List<TankSnapshot> Enemies = new List<TankSnapshot>();
         public List<BulletSnapshot> Bullets = new List<BulletSnapshot>();
         public List<BoxSnapshot> Boxes = new List<BoxSnapshot>();
+        public List<PlayerResultSnapshot> Results = new List<PlayerResultSnapshot>();
     }
 
-    internal enum NetworkDifficulty
+    public enum NetworkDifficulty
     {
         Easy,
-        Hard,
-        Reality
+        Medium,
+        Hard
     }
 
-    internal sealed class NetworkConfig
+    public enum NetworkJoinMode
+    {
+        Search,
+        Create,
+        JoinByRoomId
+    }
+
+    public enum BattleRuleMode
+    {
+        FreeBattle,
+        BaseDefense
+    }
+
+    public enum MapTileType
+    {
+        Empty,
+        Wall,
+        Water,
+        Grass,
+        Iron,
+        Base
+    }
+
+    [Serializable]
+    public sealed class GameMapConfig
+    {
+        public string Name = "系统地图 1";
+        public int Width = 96;
+        public int Height = 96;
+        public MapTileType[] Tiles = new MapTileType[96 * 96];
+    }
+
+    public sealed class NetworkConfig
     {
         public string ServerHost = "127.0.0.1";
         public int ServerPort = 51888;
         public string PlayerName = "玩家";
         public NetworkDifficulty Difficulty = NetworkDifficulty.Easy;
+        public NetworkJoinMode JoinMode = NetworkJoinMode.Search;
+        public string RoomId = string.Empty;
+        public int PlayerCount = 2;
+        public BattleRuleMode BattleRule = BattleRuleMode.FreeBattle;
+        public GameMapConfig MapConfig;
+    }
+
+    public sealed class GameLaunchOptions
+    {
+        public GameMode Mode = GameMode.SinglePlayer;
+        public TankType TankType = TankType.Green;
+        public bool StartImmediately;
+        public bool UseNetwork;
+        public NetworkDifficulty Difficulty = NetworkDifficulty.Easy;
+        public NetworkConfig NetworkConfig;
+        public int PlayerCount = 1;
+        public BattleRuleMode BattleRule = BattleRuleMode.FreeBattle;
+        public GameMapConfig MapConfig;
     }
 
     internal static class NetworkSerialization
