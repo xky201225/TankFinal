@@ -22,23 +22,40 @@ namespace Peace_of_Tanks
         public int BaseAttack { get; set; }
         public int BaseHealth { get; set; }
         public int UnlockExp { get; set; }
-        public int AttackPerLevel { get; set; } = 5;
-        public int HealthPerLevel { get; set; } = 10;
-        public int MaxLevel { get; set; } = 5;
+        public const int MaxUpgradeLevel = 5;
+        private const double SpeedUpgradeMultiplier = 1.45;
+        private const int AttackUpgradeBonus = 10;
+        private const int HealthUpgradeBonus = 15;
 
-        public int GetAttackAtLevel(int level)
+        public int GetAttackAtLevel(int attackLevel)
         {
-            return BaseAttack + (level - 1) * AttackPerLevel;
+            return BaseAttack + attackLevel * AttackUpgradeBonus;
         }
 
-        public int GetHealthAtLevel(int level)
+        public int GetHealthAtLevel(int healthLevel)
         {
-            return BaseHealth + (level - 1) * HealthPerLevel;
+            return BaseHealth + healthLevel * HealthUpgradeBonus;
         }
 
-        public static int GetExpForUpgrade(int currentLevel)
+        public static double GetSpeedMultiplierAtLevel(int speedLevel)
         {
-            return currentLevel * 10;
+            return Math.Pow(SpeedUpgradeMultiplier, speedLevel);
+        }
+
+        public static double GetBulletSpeedMultiplierAtLevel(int bulletSpeedLevel)
+        {
+            return Math.Pow(SpeedUpgradeMultiplier, bulletSpeedLevel);
+        }
+
+        public static int GetExpForUpgrade(int currentUpgradeLevel)
+        {
+            int[] costs = { 20, 35, 55, 80, 100 };
+            if (currentUpgradeLevel < 0 || currentUpgradeLevel >= costs.Length)
+            {
+                return -1;
+            }
+
+            return costs[currentUpgradeLevel];
         }
     }
 
@@ -125,23 +142,62 @@ namespace Peace_of_Tanks
     {
         public TankType Type { get; set; }
         public int Level { get; set; } = 1;
+        public int SpeedLevel { get; set; } = 0;
+        public int AttackLevel { get; set; } = 0;
+        public int HealthLevel { get; set; } = 0;
+        public int BulletSpeedLevel { get; set; } = 0;
         public int CurrentExp { get; set; } = 0;
         public bool IsUnlocked { get; set; } = false;
 
-        public int GetExpForNextLevel()
+        public int GetExpForNextLevel(TankUpgradeType upgradeType)
         {
-            if (Level >= 5)
+            int currentLevel = GetUpgradeLevel(upgradeType);
+            if (currentLevel >= TankConfig.MaxUpgradeLevel)
             {
                 return -1;
             }
 
-            return TankConfig.GetExpForUpgrade(Level);
+            return TankConfig.GetExpForUpgrade(currentLevel);
         }
 
-        public bool CanUpgrade()
+        public int GetUpgradeLevel(TankUpgradeType upgradeType)
         {
-            return Level < 5 && CurrentExp >= GetExpForNextLevel();
+            switch (upgradeType)
+            {
+                case TankUpgradeType.Speed: return SpeedLevel;
+                case TankUpgradeType.Attack: return AttackLevel;
+                case TankUpgradeType.Health: return HealthLevel;
+                case TankUpgradeType.BulletSpeed: return BulletSpeedLevel;
+                default: return 0;
+            }
         }
+
+        public void IncreaseUpgradeLevel(TankUpgradeType upgradeType)
+        {
+            switch (upgradeType)
+            {
+                case TankUpgradeType.Speed:
+                    SpeedLevel++;
+                    break;
+                case TankUpgradeType.Attack:
+                    AttackLevel++;
+                    break;
+                case TankUpgradeType.Health:
+                    HealthLevel++;
+                    break;
+                case TankUpgradeType.BulletSpeed:
+                    BulletSpeedLevel++;
+                    break;
+            }
+        }
+    }
+
+    public enum TankUpgradeType
+    {
+        Speed,
+        Attack,
+        Health,
+        BulletSpeed
     }
 
     public class PlayerData
@@ -161,6 +217,10 @@ namespace Peace_of_Tanks
                 {
                     Type = type,
                     Level = 1,
+                    SpeedLevel = 0,
+                    AttackLevel = 0,
+                    HealthLevel = 0,
+                    BulletSpeedLevel = 0,
                     CurrentExp = 0,
                     IsUnlocked = type == TankType.Green
                 };
@@ -172,7 +232,7 @@ namespace Peace_of_Tanks
             TotalExp += exp;
         }
 
-        public bool UpgradeTank(TankType type)
+        public bool UpgradeTank(TankType type, TankUpgradeType upgradeType)
         {
             if (!Tanks.ContainsKey(type))
             {
@@ -180,18 +240,18 @@ namespace Peace_of_Tanks
             }
 
             PlayerTankData tank = Tanks[type];
-            if (!CanUpgradeTank(type))
+            if (!CanUpgradeTank(type, upgradeType))
             {
                 return false;
             }
 
-            int expNeeded = tank.GetExpForNextLevel();
+            int expNeeded = tank.GetExpForNextLevel(upgradeType);
             TotalExp -= expNeeded;
-            tank.Level++;
+            tank.IncreaseUpgradeLevel(upgradeType);
             return true;
         }
 
-        public bool CanUpgradeTank(TankType type)
+        public bool CanUpgradeTank(TankType type, TankUpgradeType upgradeType)
         {
             if (!Tanks.ContainsKey(type))
             {
@@ -199,8 +259,8 @@ namespace Peace_of_Tanks
             }
 
             PlayerTankData tank = Tanks[type];
-            int expNeeded = tank.GetExpForNextLevel();
-            return tank.IsUnlocked && tank.Level < 5 && expNeeded > 0 && TotalExp >= expNeeded;
+            int expNeeded = tank.GetExpForNextLevel(upgradeType);
+            return tank.IsUnlocked && tank.GetUpgradeLevel(upgradeType) < TankConfig.MaxUpgradeLevel && expNeeded > 0 && TotalExp >= expNeeded;
         }
 
         public bool UnlockTank(TankType type)
@@ -239,14 +299,26 @@ namespace Peace_of_Tanks
         {
             PlayerTankData tank = Tanks[SelectedTank];
             TankConfig config = TankConfigs.GetConfig(SelectedTank);
-            return config.GetAttackAtLevel(tank.Level);
+            return config.GetAttackAtLevel(tank.AttackLevel);
         }
 
         public int GetSelectedTankHealth()
         {
             PlayerTankData tank = Tanks[SelectedTank];
             TankConfig config = TankConfigs.GetConfig(SelectedTank);
-            return config.GetHealthAtLevel(tank.Level);
+            return config.GetHealthAtLevel(tank.HealthLevel);
+        }
+
+        public double GetSelectedTankSpeedMultiplier()
+        {
+            PlayerTankData tank = Tanks[SelectedTank];
+            return TankConfig.GetSpeedMultiplierAtLevel(tank.SpeedLevel);
+        }
+
+        public double GetSelectedTankBulletSpeedMultiplier()
+        {
+            PlayerTankData tank = Tanks[SelectedTank];
+            return TankConfig.GetBulletSpeedMultiplierAtLevel(tank.BulletSpeedLevel);
         }
     }
 
@@ -445,6 +517,10 @@ namespace Peace_of_Tanks
                 {
                     TankType = (int)pair.Key,
                     Level = pair.Value.Level,
+                    SpeedLevel = pair.Value.SpeedLevel,
+                    AttackLevel = pair.Value.AttackLevel,
+                    HealthLevel = pair.Value.HealthLevel,
+                    BulletSpeedLevel = pair.Value.BulletSpeedLevel,
                     CurrentExp = pair.Value.CurrentExp,
                     IsUnlocked = pair.Value.IsUnlocked
                 });
@@ -479,10 +555,29 @@ namespace Peace_of_Tanks
                 {
                     Type = tankType,
                     Level = tank.Level,
+                    SpeedLevel = ClampUpgradeLevel(tank.SpeedLevel),
+                    AttackLevel = ClampUpgradeLevel(tank.AttackLevel),
+                    HealthLevel = ClampUpgradeLevel(tank.HealthLevel),
+                    BulletSpeedLevel = ClampUpgradeLevel(tank.BulletSpeedLevel),
                     CurrentExp = tank.CurrentExp,
                     IsUnlocked = tank.IsUnlocked
                 };
             }
+        }
+
+        private static int ClampUpgradeLevel(int value)
+        {
+            if (value < 0)
+            {
+                return 0;
+            }
+
+            if (value > TankConfig.MaxUpgradeLevel)
+            {
+                return TankConfig.MaxUpgradeLevel;
+            }
+
+            return value;
         }
 
         private static TankType ParseTankType(int value)

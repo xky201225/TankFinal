@@ -15,6 +15,14 @@ public partial class UserTank
 
     public int Level { get; set; }
 
+    public int SpeedLevel { get; set; }
+
+    public int AttackLevel { get; set; }
+
+    public int HealthLevel { get; set; }
+
+    public int BulletSpeedLevel { get; set; }
+
     public int CurrentExp { get; set; }
 
     public bool IsUnlocked { get; set; }

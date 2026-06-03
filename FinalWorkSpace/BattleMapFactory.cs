@@ -108,8 +108,8 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            AddFortifiedBaseTiles(map, 2, 15, true);
-            AddFortifiedBaseTiles(map, GridWidth - 4, 15, false);
+            AddFortifiedBaseTiles(map, 2, 8, true);
+            AddFortifiedBaseTiles(map, GridWidth - 4, GridHeight - 10, false);
         }
 
         public static void ApplyMap(GameMapConfig map, List<Box> boxes)
@@ -186,20 +186,20 @@ namespace Peace_of_Tanks
 
         private static void AddBaseDefenseSites(List<Box> boxes)
         {
-            AddFortifiedBase(boxes, 2, 15, true);
-            AddFortifiedBase(boxes, GridWidth - 4, 15, false);
+            AddFortifiedBase(boxes, 2, 8, true);
+            AddFortifiedBase(boxes, GridWidth - 4, GridHeight - 10, false);
         }
 
         private static void AddFortifiedBase(List<Box> boxes, int gridX, int gridY, bool playerBase)
         {
-            RemoveArea(boxes, gridX - 2, gridY - 2, 5, 5);
-            AddBox(boxes, playerBase ? (Box)new Box_PlayerBase(gridX * TileSize, gridY * TileSize) : new Box_EnemyBase(gridX * TileSize, gridY * TileSize));
+            RemoveArea(boxes, gridX - 2, gridY - 2, 6, 6);
+            AddBaseCluster(boxes, gridX, gridY, playerBase);
 
-            for (int yy = gridY - 1; yy <= gridY + 1; yy++)
+            for (int yy = gridY - 1; yy <= gridY + 2; yy++)
             {
-                for (int xx = gridX - 1; xx <= gridX + 1; xx++)
+                for (int xx = gridX - 1; xx <= gridX + 2; xx++)
                 {
-                    if (xx == gridX && yy == gridY)
+                    if (xx >= gridX && xx <= gridX + 1 && yy >= gridY && yy <= gridY + 1)
                     {
                         continue;
                     }
@@ -221,14 +221,20 @@ namespace Peace_of_Tanks
 
         private static void AddFortifiedBaseTiles(GameMapConfig map, int gridX, int gridY, bool playerBase)
         {
-            ClearTiles(map, gridX - 2, gridY - 2, 5, 5);
-            SetTile(map, gridX, gridY, MapTileType.Base);
-
-            for (int yy = gridY - 1; yy <= gridY + 1; yy++)
+            ClearTiles(map, gridX - 2, gridY - 2, 6, 6);
+            for (int yy = gridY; yy <= gridY + 1; yy++)
             {
-                for (int xx = gridX - 1; xx <= gridX + 1; xx++)
+                for (int xx = gridX; xx <= gridX + 1; xx++)
                 {
-                    if (xx == gridX && yy == gridY)
+                    SetTile(map, xx, yy, MapTileType.Base);
+                }
+            }
+
+            for (int yy = gridY - 1; yy <= gridY + 2; yy++)
+            {
+                for (int xx = gridX - 1; xx <= gridX + 2; xx++)
+                {
+                    if (xx >= gridX && xx <= gridX + 1 && yy >= gridY && yy <= gridY + 1)
                     {
                         continue;
                     }
@@ -244,6 +250,17 @@ namespace Peace_of_Tanks
                     }
 
                     SetTile(map, xx, yy, MapTileType.Wall);
+                }
+            }
+        }
+
+        private static void AddBaseCluster(List<Box> boxes, int gridX, int gridY, bool playerBase)
+        {
+            for (int yy = gridY; yy <= gridY + 1; yy++)
+            {
+                for (int xx = gridX; xx <= gridX + 1; xx++)
+                {
+                    AddBox(boxes, playerBase ? (Box)new Box_PlayerBase(xx * TileSize, yy * TileSize) : new Box_EnemyBase(xx * TileSize, yy * TileSize));
                 }
             }
         }

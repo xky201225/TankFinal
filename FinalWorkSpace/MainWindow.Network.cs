@@ -538,13 +538,13 @@ namespace Peace_of_Tanks
             if (firstPlayer && player1.message.isSpace && player1.message.pauseSpace == 0)
             {
                 player1.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
-                bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1, player1.attack));
+                bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1, player1.attack, player1.bulletSpeedMultiplier));
             }
 
             if (secondPlayer && player2.message.isSpace && player2.message.pauseSpace == 0)
             {
                 player2.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
-                bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2, player2.attack));
+                bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2, player2.attack, player2.bulletSpeedMultiplier));
             }
         }
 
@@ -854,19 +854,27 @@ namespace Peace_of_Tanks
         private void ApplyTankStats(PlayerTank tank, TankType tankType, bool useLocalProgress)
         {
             TankConfig config = TankConfigs.GetConfig(tankType);
-            int level = 1;
+            int speedLevel = 0;
+            int attackLevel = 0;
+            int healthLevel = 0;
+            int bulletSpeedLevel = 0;
             if (useLocalProgress)
             {
                 PlayerTankData tankData;
                 if (DataManager.CurrentPlayer.Tanks.TryGetValue(tankType, out tankData))
                 {
-                    level = tankData.Level;
+                    speedLevel = tankData.SpeedLevel;
+                    attackLevel = tankData.AttackLevel;
+                    healthLevel = tankData.HealthLevel;
+                    bulletSpeedLevel = tankData.BulletSpeedLevel;
                 }
             }
 
-            tank.maxHitpoints = config.GetHealthAtLevel(level);
+            tank.maxHitpoints = config.GetHealthAtLevel(healthLevel);
             tank.hitpoints = tank.maxHitpoints;
-            tank.attack = config.GetAttackAtLevel(level);
+            tank.attack = config.GetAttackAtLevel(attackLevel);
+            tank.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(speedLevel);
+            tank.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(bulletSpeedLevel);
         }
 
         private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, int direction)

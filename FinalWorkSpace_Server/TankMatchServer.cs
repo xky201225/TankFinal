@@ -199,6 +199,10 @@ namespace Peace_of_Tanks_Server
                             UserId = user.Id,
                             TankType = tankType,
                             Level = 1,
+                            SpeedLevel = 0,
+                            AttackLevel = 0,
+                            HealthLevel = 0,
+                            BulletSpeedLevel = 0,
                             CurrentExp = 0,
                             IsUnlocked = tankType == 0
                         });
@@ -464,6 +468,10 @@ namespace Peace_of_Tanks_Server
                 {
                     TankType = tank.TankType,
                     Level = tank.Level,
+                    SpeedLevel = tank.SpeedLevel,
+                    AttackLevel = tank.AttackLevel,
+                    HealthLevel = tank.HealthLevel,
+                    BulletSpeedLevel = tank.BulletSpeedLevel,
                     CurrentExp = tank.CurrentExp,
                     IsUnlocked = tank.IsUnlocked
                 });
@@ -494,11 +502,30 @@ namespace Peace_of_Tanks_Server
                 }
 
                 tank.Level = tankPayload != null ? tankPayload.Level : 1;
+                tank.SpeedLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.SpeedLevel) : 0;
+                tank.AttackLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.AttackLevel) : 0;
+                tank.HealthLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.HealthLevel) : 0;
+                tank.BulletSpeedLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.BulletSpeedLevel) : 0;
                 tank.CurrentExp = tankPayload != null ? tankPayload.CurrentExp : 0;
                 tank.IsUnlocked = tankPayload != null ? tankPayload.IsUnlocked : tankType == 0;
             }
 
             db.SaveChanges();
+        }
+
+        private static int ClampUpgradeLevel(int value)
+        {
+            if (value < 0)
+            {
+                return 0;
+            }
+
+            if (value > 5)
+            {
+                return 5;
+            }
+
+            return value;
         }
 
         private static string HashPassword(string password)

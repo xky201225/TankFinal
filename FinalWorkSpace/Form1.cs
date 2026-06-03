@@ -1095,7 +1095,7 @@ namespace Peace_of_Tanks
             int safeY = centerY - 25;
             for (int i = boxes.Count - 1; i >= 0; i--)
             {
-                if (IsBlockingBox(boxes[i]) && RectsOverlap(safeX, safeY, 100, 100, boxes[i].x, boxes[i].y, 25, 25))
+                if (!(boxes[i] is Box_Base) && IsBlockingBox(boxes[i]) && RectsOverlap(safeX, safeY, 100, 100, boxes[i].x, boxes[i].y, 25, 25))
                 {
                     boxes.RemoveAt(i);
                 }
@@ -1918,13 +1918,15 @@ namespace Peace_of_Tanks
             var playerTankData = playerData.Tanks[selectedTankType];
             var config = TankConfigs.GetConfig(selectedTankType);
 
-            int attack = config.GetAttackAtLevel(playerTankData.Level);
-            int health = config.GetHealthAtLevel(playerTankData.Level);
+            int attack = config.GetAttackAtLevel(playerTankData.AttackLevel);
+            int health = config.GetHealthAtLevel(playerTankData.HealthLevel);
 
             // 加载对应颜色的坦克图片
             var (tankImg1, tankImg2) = TankResourceLoader.GetPlayerTankImages(selectedTankType);
 
             player1 = new PlayerTank(tankImg1, tankImg2, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -100, -100, 2, health, attack);
+            player1.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(playerTankData.SpeedLevel);
+            player1.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(playerTankData.BulletSpeedLevel);
             player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2, config.BaseHealth, config.BaseAttack);
 
             string statsPath = AppPaths.GetDataPath("stats.dat");

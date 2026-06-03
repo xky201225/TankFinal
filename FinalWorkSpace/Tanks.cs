@@ -36,7 +36,7 @@ namespace Peace_of_Tanks
 
     public class BaseTank
     {
-        protected static readonly double MoveSpeed = GameTiming.ScaleDistance(1.5);
+        protected static readonly double BaseMoveSpeed = GameTiming.ScaleDistance(1.5);
         protected const int TankSize = 50;
         protected Bitmap pictureTank, pictureTank1, pictureTank2;
         protected bool changePicture;
@@ -45,6 +45,8 @@ namespace Peace_of_Tanks
         public int maxHitpoints = 1;  // 最大生命值
         public int attack = 10;        // 攻击力
         public TankType TankType = TankType.Green;
+        public double speedMultiplier = 1.0;
+        public double bulletSpeedMultiplier = 1.0;
         protected double preciseX, preciseY;
         public int direction; //0 - left, 1 - right, 2 - up, 3 - down
         public int x
@@ -173,6 +175,11 @@ namespace Peace_of_Tanks
                 && nextX + TankSize <= bounds.Right
                 && nextY + TankSize <= bounds.Bottom;
         }
+
+        protected double GetMoveSpeed()
+        {
+            return BaseMoveSpeed * Math.Max(0.1, speedMultiplier);
+        }
     }
 
     class PlayerTank : BaseTank
@@ -224,7 +231,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseX -= MoveSpeed;
+                preciseX -= GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -260,7 +267,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseY -= MoveSpeed;
+                preciseY -= GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -296,7 +303,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseX += MoveSpeed;
+                preciseX += GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -332,7 +339,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseY += MoveSpeed;
+                preciseY += GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -552,7 +559,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseX -= MoveSpeed;
+                preciseX -= GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -592,7 +599,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseY -= MoveSpeed;
+                preciseY -= GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -621,7 +628,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseX += MoveSpeed;
+                preciseX += GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -650,7 +657,7 @@ namespace Peace_of_Tanks
                         return;
                 }
 
-                preciseY += MoveSpeed;
+                preciseY += GetMoveSpeed();
 
                 changePictureFun();
             }
@@ -660,7 +667,7 @@ namespace Peace_of_Tanks
             }
             if (message.pauseSpace < 0)
             {
-                Bullet bullet = new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, direction, 0, attack);
+                Bullet bullet = new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, direction, 0, attack, bulletSpeedMultiplier);
                 message.pauseSpace = GameTiming.ScaleLegacyTicks(50);
                 bullets.Add(bullet);
             }

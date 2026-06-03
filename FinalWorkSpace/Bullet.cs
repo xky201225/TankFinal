@@ -8,12 +8,13 @@ namespace Peace_of_Tanks
         private const int BulletSize = 10;
         private const int TankSize = 50;
         private const int TankCenterOffset = (TankSize - BulletSize) / 2;
-        private static readonly double Speed = GameTiming.ScaleDistance(125);
+        private static readonly double BaseSpeed = GameTiming.ScaleDistance(125);
         private const double CollisionStep = 5.0;
         private readonly Bitmap pictureBullet;
         private double preciseX;
         private double preciseY;
         private readonly int direction;
+        private readonly double speed;
 
         public int who;
         public int damage = 1;
@@ -37,10 +38,18 @@ namespace Peace_of_Tanks
 
         public int MoveStepCount
         {
-            get { return (int)Math.Ceiling(Speed / CollisionStep); }
+            get { return (int)Math.Ceiling(speed / CollisionStep); }
         }
 
-        public Bullet(Bitmap picture, int x, int y, int direction, int who)
+        public Bullet(Bitmap picture, int x, int y, int direction, int who) : this(picture, x, y, direction, who, 1, 1.0)
+        {
+        }
+
+        public Bullet(Bitmap picture, int x, int y, int direction, int who, int damage) : this(picture, x, y, direction, who, damage, 1.0)
+        {
+        }
+
+        public Bullet(Bitmap picture, int x, int y, int direction, int who, int damage, double speedMultiplier)
         {
             if (ResourceManager.Bullet != null && ResourceManager.Bullet.Width > 1)
             {
@@ -54,15 +63,12 @@ namespace Peace_of_Tanks
 
             preciseX = x;
             preciseY = y;
+            speed = BaseSpeed * Math.Max(0.1, speedMultiplier);
             this.direction = direction;
             this.who = who;
+            this.damage = damage;
             ChangePosition();
             RotatePicture(direction);
-        }
-
-        public Bullet(Bitmap picture, int x, int y, int direction, int who, int damage) : this(picture, x, y, direction, who)
-        {
-            this.damage = damage;
         }
 
         private void ChangePosition()
@@ -106,7 +112,7 @@ namespace Peace_of_Tanks
 
         public void MoveStep(int stepIndex)
         {
-            double distance = Math.Min(CollisionStep, Speed - CollisionStep * stepIndex);
+            double distance = Math.Min(CollisionStep, speed - CollisionStep * stepIndex);
             if (distance <= 0)
             {
                 return;
