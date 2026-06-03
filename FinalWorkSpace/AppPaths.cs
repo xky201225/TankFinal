@@ -46,14 +46,5 @@ namespace Peace_of_Tanks
         {
             return Path.Combine(BaseDirectory, fileName);
         }
-
-        public static string LocalDatabaseConnectionString
-        {
-            get
-            {
-                string databasePath = FindContentPath("Database1.mdf");
-                return "Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=" + databasePath + ";Integrated Security=True";
-            }
-        }
     }
 }

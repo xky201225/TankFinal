@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading;
 using System.Windows.Forms;
-using Peace_of_Tanks.Models;
 
 namespace Peace_of_Tanks
 {
@@ -173,17 +170,6 @@ namespace Peace_of_Tanks
         public void AddExp(int exp)
         {
             TotalExp += exp;
-            foreach (PlayerTankData tank in Tanks.Values)
-            {
-                if (!tank.IsUnlocked)
-                {
-                    TankConfig config = TankConfigs.GetConfig(tank.Type);
-                    if (TotalExp >= config.UnlockExp)
-                    {
-                        tank.IsUnlocked = true;
-                    }
-                }
-            }
         }
 
         public bool UpgradeTank(TankType type)
@@ -224,6 +210,7 @@ namespace Peace_of_Tanks
                 return false;
             }
 
+            TotalExp -= config.UnlockExp;
             tank.IsUnlocked = true;
             return true;
         }
@@ -301,18 +288,14 @@ namespace Peace_of_Tanks
         {
             try
             {
-                using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
-                {
-                    currentPlayerData = AuthenticateUser();
-                    SaveData();
-                    SyncWithServer();
-                    StartSyncTimer();
-                }
+                currentPlayerData = AuthenticateUser();
+                SaveJsonFallback();
+                StartSyncTimer();
             }
             catch (Exception ex)
             {
                 LoadJsonFallback();
-                MessageBox.Show("加载数据库数据失败，已使用本地临时数据：" + ex.Message);
+                MessageBox.Show("连接服务端数据库失败，已使用本地临时数据：" + ex.Message);
             }
         }
 
@@ -325,12 +308,13 @@ namespace Peace_of_Tanks
 
             try
             {
-                SaveToLocalDatabase(currentPlayerData);
+                SyncWithServer();
+                SaveJsonFallback();
             }
             catch (Exception ex)
             {
                 SaveJsonFallback();
-                MessageBox.Show("保存数据库数据失败，已临时保存到本地 JSON：" + ex.Message);
+                MessageBox.Show("保存到服务端数据库失败，已临时保存到本地 JSON：" + ex.Message);
             }
         }
 
@@ -362,15 +346,22 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(currentAuthToken))
+            {
+                SaveJsonFallback();
+                return;
+            }
+
             string error;
             UserSyncPayload serverPayload;
             if (!TcpGameClient.SyncUser(currentServerHost, currentServerPort, currentPlayerData.UserName, currentAuthToken, MapPlayerDataToPayload(currentPlayerData), out serverPayload, out error))
             {
+                SaveJsonFallback();
                 return;
             }
 
             currentPlayerData = MapPayloadToPlayerData(serverPayload, currentPlayerData.UserId);
-            SaveToLocalDatabase(currentPlayerData);
+            SaveJsonFallback();
         }
 
         private static PlayerData AuthenticateUser()
@@ -420,79 +411,6 @@ namespace Peace_of_Tanks
             syncTimer = new System.Threading.Timer(_ => SyncWithServer(), null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
         }
 
-        private static void SaveToLocalDatabase(PlayerData playerData)
-        {
-            using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
-            {
-                User user = null;
-                if (playerData.UserId > 0)
-                {
-                    user = db.Users.FirstOrDefault(u => u.Id == playerData.UserId);
-                }
-
-                if (user == null && !string.IsNullOrWhiteSpace(playerData.UserName))
-                {
-                    user = db.Users.FirstOrDefault(u => u.UserName == playerData.UserName);
-                }
-
-                if (user == null)
-                {
-                    user = CreateUserEntity(playerData.UserName);
-                    db.Users.Add(user);
-                    db.SaveChanges();
-                }
-
-                user.UserName = playerData.UserName.Trim();
-                user.TotalExp = playerData.TotalExp;
-                user.SelectedTank = (int)playerData.SelectedTank;
-                user.UpdatedAt = DateTime.UtcNow;
-                db.SaveChanges();
-
-                playerData.UserId = user.Id;
-                SaveTankData(db, user.Id, playerData);
-            }
-        }
-
-        private static PlayerData MapUserToPlayerData(LocalDBMSSQLLocalDBContext db, User user)
-        {
-            PlayerData playerData = new PlayerData
-            {
-                UserId = user.Id,
-                UserName = user.UserName,
-                TotalExp = user.TotalExp,
-                SelectedTank = (TankType)user.SelectedTank
-            };
-
-            foreach (UserTank tankRow in db.UserTanks.Where(t => t.UserId == user.Id).ToList())
-            {
-                TankType tankType = (TankType)tankRow.TankType;
-                playerData.Tanks[tankType] = new PlayerTankData
-                {
-                    Type = tankType,
-                    Level = tankRow.Level,
-                    CurrentExp = tankRow.CurrentExp,
-                    IsUnlocked = tankRow.IsUnlocked
-                };
-            }
-
-            EnsureAllTankRows(db, user.Id, playerData);
-            return playerData;
-        }
-
-        private static User CreateUserEntity(string userName)
-        {
-            DateTime now = DateTime.UtcNow;
-            return new User
-            {
-                UserName = string.IsNullOrWhiteSpace(userName) ? "玩家" + Environment.UserName : userName.Trim(),
-                PasswordHash = "LOCAL_ONLY",
-                TotalExp = 0,
-                SelectedTank = 0,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-        }
-
         private static UserSyncPayload MapPlayerDataToPayload(PlayerData playerData)
         {
             UserSyncPayload payload = new UserSyncPayload
@@ -518,17 +436,22 @@ namespace Peace_of_Tanks
 
         private static PlayerData MapPayloadToPlayerData(UserSyncPayload payload, int existingUserId)
         {
+            if (payload == null)
+            {
+                return new PlayerData();
+            }
+
             PlayerData playerData = new PlayerData
             {
                 UserId = existingUserId,
                 UserName = payload.UserName,
                 TotalExp = payload.TotalExp,
-                SelectedTank = (TankType)payload.SelectedTank
+                SelectedTank = ParseTankType(payload.SelectedTank)
             };
 
             foreach (TankSyncPayload tank in payload.Tanks)
             {
-                TankType tankType = (TankType)tank.TankType;
+                TankType tankType = ParseTankType(tank.TankType);
                 playerData.Tanks[tankType] = new PlayerTankData
                 {
                     Type = tankType,
@@ -541,62 +464,14 @@ namespace Peace_of_Tanks
             return playerData;
         }
 
-        private static void EnsureAllTankRows(LocalDBMSSQLLocalDBContext db, int userId, PlayerData playerData)
+        private static TankType ParseTankType(int value)
         {
-            bool changed = false;
-            foreach (TankType type in Enum.GetValues(typeof(TankType)))
+            if (value >= 0 && value <= 4)
             {
-                if (!playerData.Tanks.ContainsKey(type))
-                {
-                    playerData.Tanks[type] = new PlayerTankData
-                    {
-                        Type = type,
-                        Level = 1,
-                        CurrentExp = 0,
-                        IsUnlocked = type == TankType.Green
-                    };
-                }
-
-                int tankType = (int)type;
-                if (!db.UserTanks.Any(t => t.UserId == userId && t.TankType == tankType))
-                {
-                    PlayerTankData tankData = playerData.Tanks[type];
-                    db.UserTanks.Add(new UserTank
-                    {
-                        UserId = userId,
-                        TankType = tankType,
-                        Level = tankData.Level,
-                        CurrentExp = tankData.CurrentExp,
-                        IsUnlocked = tankData.IsUnlocked
-                    });
-                    changed = true;
-                }
+                return (TankType)value;
             }
 
-            if (changed)
-            {
-                db.SaveChanges();
-            }
-        }
-
-        private static void SaveTankData(LocalDBMSSQLLocalDBContext db, int userId, PlayerData playerData)
-        {
-            EnsureAllTankRows(db, userId, playerData);
-            foreach (KeyValuePair<TankType, PlayerTankData> pair in playerData.Tanks)
-            {
-                int tankType = (int)pair.Key;
-                UserTank tankRow = db.UserTanks.FirstOrDefault(t => t.UserId == userId && t.TankType == tankType);
-                if (tankRow == null)
-                {
-                    continue;
-                }
-
-                tankRow.Level = pair.Value.Level;
-                tankRow.CurrentExp = pair.Value.CurrentExp;
-                tankRow.IsUnlocked = pair.Value.IsUnlocked;
-            }
-
-            db.SaveChanges();
+            return TankType.Green;
         }
 
         private static void LoadJsonFallback()
