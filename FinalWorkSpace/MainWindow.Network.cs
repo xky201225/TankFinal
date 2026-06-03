@@ -656,7 +656,7 @@ namespace Peace_of_Tanks
 
             for (int i = 0; i < snapshot.Bullets.Count; i++)
             {
-                DrawRotatedImage(grMemory, snapshot.Bullets[i].Who == 0 ? Peace_of_Tanks.Properties.Resources.bulletEnemy : Peace_of_Tanks.Properties.Resources.bullet1,
+                DrawRotatedImage(grMemory, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan,
                     snapshot.Bullets[i].X, snapshot.Bullets[i].Y, 10, 10, snapshot.Bullets[i].Direction);
             }
 
@@ -752,11 +752,11 @@ namespace Peace_of_Tanks
 
         private Bitmap GetBoxImage(int type)
         {
-            if (type == 0) return ResourceManager.TerrainWall ?? Peace_of_Tanks.Properties.Resources.wall;
-            if (type == 1) return ResourceManager.TerrainWater ?? Peace_of_Tanks.Properties.Resources.water;
-            if (type == 2) return ResourceManager.TerrainGrass ?? Peace_of_Tanks.Properties.Resources.green;
+            if (type == 0) return ResourceManager.TerrainWall ?? Peace_of_Tanks.Properties.Resources.Qiang;
+            if (type == 1) return ResourceManager.TerrainWater ?? Peace_of_Tanks.Properties.Resources.Shui;
+            if (type == 2) return ResourceManager.TerrainGrass ?? Peace_of_Tanks.Properties.Resources.Cao;
             if (type == 4) return ResourceManager.TerrainBase ?? Peace_of_Tanks.Properties.Resources.base_tile;
-            return ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.iron;
+            return ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.Tie;
         }
 
         private void DrawSnapshotAnimation(AnimationSnapshot animation)

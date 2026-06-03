@@ -37,7 +37,7 @@ namespace Peace_of_Tanks
                 return launchOptions ?? new GameLaunchOptions
                 {
                     Mode = selectedMode,
-                    TankType = selectedTank,
+                TankType = selectedTank,
                     StartImmediately = true
                 };
             }
@@ -887,7 +887,7 @@ namespace Peace_of_Tanks
                     ServerHost = string.IsNullOrWhiteSpace(host) ? DefaultChatHost : host.Trim(),
                     ServerPort = port,
                     PlayerName = string.IsNullOrWhiteSpace(playerName) ? chatPlayerName : playerName.Trim(),
-                    TankType = selectedTank,
+                    TankType = TankType.Green,
                     Difficulty = difficulty,
                     JoinMode = joinMode,
                     RoomId = roomId ?? string.Empty,

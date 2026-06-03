@@ -1062,7 +1062,7 @@ namespace Peace_of_Tanks
             Point spawnPoint = FindSafeSpawnPoint(x, y, tanks);
 
             EnemyTank enemy = new EnemyTank(images.Item1, images.Item2,
-                Peace_of_Tanks.Properties.Resources.bulletEnemy,
+                ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan,
                 spawnPoint.X,
                 spawnPoint.Y,
                 2,
@@ -1257,7 +1257,7 @@ namespace Peace_of_Tanks
                 var (img1_1, img1_2) = TankResourceLoader.GetEnemyTankImages(enemyType1);
                 var config1 = TankConfigs.GetConfig(enemyType1);
                 EnemyTank enemy = new EnemyTank(img1_1, img1_2,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[0, 0], level.masPointsSpawnEnemy[0, 1], 2,
+                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[0, 0], level.masPointsSpawnEnemy[0, 1], 2,
                     config1.BaseHealth, config1.BaseAttack);
                 enemies.Add(enemy);
                 tanks.Add(enemy);
@@ -1267,7 +1267,7 @@ namespace Peace_of_Tanks
                 var (img2_1, img2_2) = TankResourceLoader.GetEnemyTankImages(enemyType2);
                 var config2 = TankConfigs.GetConfig(enemyType2);
                 enemy = new EnemyTank(img2_1, img2_2,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[1, 0], level.masPointsSpawnEnemy[1, 1], 2,
+                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[1, 0], level.masPointsSpawnEnemy[1, 1], 2,
                     config2.BaseHealth, config2.BaseAttack);
                 enemies.Add(enemy);
                 tanks.Add(enemy);
@@ -1277,7 +1277,7 @@ namespace Peace_of_Tanks
                 var (img3_1, img3_2) = TankResourceLoader.GetEnemyTankImages(enemyType3);
                 var config3 = TankConfigs.GetConfig(enemyType3);
                 enemy = new EnemyTank(img3_1, img3_2,
-                    Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[2, 0], level.masPointsSpawnEnemy[2, 1], 2,
+                    ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[2, 0], level.masPointsSpawnEnemy[2, 1], 2,
                     config3.BaseHealth, config3.BaseAttack);
                 tanks.Add(enemy);
                 enemies.Add(enemy);
@@ -1426,7 +1426,7 @@ namespace Peace_of_Tanks
                     var configEnemy = TankConfigs.GetConfig(enemyType);
 
                     EnemyTank enemy = new EnemyTank(imgEnemy1, imgEnemy2,
-                        Peace_of_Tanks.Properties.Resources.bulletEnemy, level.masPointsSpawnEnemy[num, 0], level.masPointsSpawnEnemy[num, 1], 2,
+                        ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, level.masPointsSpawnEnemy[num, 0], level.masPointsSpawnEnemy[num, 1], 2,
                         configEnemy.BaseHealth, configEnemy.BaseAttack);
                     enemies.Add(enemy);
                     tanks.Add(enemy);
@@ -1823,12 +1823,6 @@ namespace Peace_of_Tanks
             grMemory = Graphics.FromImage(backgroundMemory);
             grMemory.DrawImage(backgroundMain, 0, 0);
 
-            Animation.boom1 = Peace_of_Tanks.Properties.Resources.boom1;
-            Animation.boom2 = Peace_of_Tanks.Properties.Resources.boom2;
-            Animation.boom3 = Peace_of_Tanks.Properties.Resources.boom3;
-            Animation.megaBoom1 = Peace_of_Tanks.Properties.Resources.megaBoom1;
-            Animation.megaBoom2 = Peace_of_Tanks.Properties.Resources.megaBoom2;
-
             // 浣跨敤閫変腑鐨勫潶鍏嬬被鍨嬪垱寤虹帺瀹跺潶鍏?
             var playerData = DataManager.CurrentPlayer;
             var playerTankData = playerData.Tanks[selectedTankType];
@@ -1840,8 +1834,8 @@ namespace Peace_of_Tanks
             // 加载对应颜色的坦克图片
             var (tankImg1, tankImg2) = TankResourceLoader.GetPlayerTankImages(selectedTankType);
 
-            player1 = new PlayerTank(tankImg1, tankImg2, Peace_of_Tanks.Properties.Resources.bullet1, -100, -100, 2, health, attack);
-            player2 = new PlayerTank(Peace_of_Tanks.Properties.Resources.player2_1, Peace_of_Tanks.Properties.Resources.player2_2, Peace_of_Tanks.Properties.Resources.bullet1, -50, -50, 2);
+            player1 = new PlayerTank(tankImg1, tankImg2, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -100, -100, 2, health, attack);
+            player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2);
 
             string statsPath = AppPaths.GetDataPath("stats.dat");
             if(File.Exists(statsPath))

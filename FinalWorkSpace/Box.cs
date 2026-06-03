@@ -30,7 +30,7 @@ namespace Peace_of_Tanks
         public Box_Wall (int x, int y) : base(x, y)
         {
             hitPoint = 1;
-            pictureBox = ResourceManager.TerrainWall ?? Peace_of_Tanks.Properties.Resources.wall;
+            pictureBox = ResourceManager.TerrainWall ?? Peace_of_Tanks.Properties.Resources.Qiang;
         }
     }
 
@@ -39,7 +39,7 @@ namespace Peace_of_Tanks
         public Box_Water(int x, int y) : base(x, y)
         {
             hitPoint = -1;
-            pictureBox = ResourceManager.TerrainWater ?? Peace_of_Tanks.Properties.Resources.water;
+            pictureBox = ResourceManager.TerrainWater ?? Peace_of_Tanks.Properties.Resources.Shui;
         }
     }
 
@@ -48,7 +48,7 @@ namespace Peace_of_Tanks
         public Box_Green(int x, int y) : base(x, y)
         {
             hitPoint = -1;
-            pictureBox = ResourceManager.TerrainGrass ?? Peace_of_Tanks.Properties.Resources.green;
+            pictureBox = ResourceManager.TerrainGrass ?? Peace_of_Tanks.Properties.Resources.Cao;
         }
     }
 
@@ -57,7 +57,7 @@ namespace Peace_of_Tanks
         public Box_Iron(int x, int y) : base(x, y)
         {
             hitPoint = -1;
-            pictureBox = ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.iron;
+            pictureBox = ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.Tie;
         }
     }
 

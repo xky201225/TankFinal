@@ -48,7 +48,7 @@ namespace Peace_of_Tanks
             }
             else
             {
-                pictureBullet = Peace_of_Tanks.Properties.Resources.bullet1;
+                pictureBullet = Peace_of_Tanks.Properties.Resources.PaoDan;
                 pictureBullet.MakeTransparent(Color.Black);
             }
 

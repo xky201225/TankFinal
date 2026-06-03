@@ -22,13 +22,6 @@ namespace Peace_of_Tanks
 
     public class Animation
     {
-        // 原有资源（保留兼容）
-        public static Bitmap boom1;
-        public static Bitmap boom2;
-        public static Bitmap boom3;
-        public static Bitmap megaBoom1;
-        public static Bitmap megaBoom2;
-
         public AnimateEventArgs message;
         public Bitmap picture;
 
@@ -41,18 +34,18 @@ namespace Peace_of_Tanks
         {
             if (message.type == 0)
             {
-                if (message.delay >= 3) picture = ResourceManager.HitEffect1 ?? boom1;
-                else if (message.delay == 2) picture = ResourceManager.HitEffect2 ?? boom2;
-                else if (message.delay == 1) picture = ResourceManager.HitEffect3 ?? boom3;
+                if (message.delay >= 3) picture = ResourceManager.HitEffect1 ?? Peace_of_Tanks.Properties.Resources.Ji1;
+                else if (message.delay == 2) picture = ResourceManager.HitEffect2 ?? Peace_of_Tanks.Properties.Resources.Ji2;
+                else if (message.delay == 1) picture = ResourceManager.HitEffect3 ?? Peace_of_Tanks.Properties.Resources.Ji3;
                 message.delay--;
             }
             else if (message.type == 1)
             {
-                if (message.delay >= 5) picture = ResourceManager.ExplosionEffect1 ?? megaBoom1;
-                else if (message.delay == 4) picture = ResourceManager.ExplosionEffect2 ?? megaBoom1;
-                else if (message.delay == 3) picture = ResourceManager.ExplosionEffect3 ?? megaBoom2;
-                else if (message.delay == 2) picture = ResourceManager.ExplosionEffect4 ?? megaBoom2;
-                else if (message.delay == 1) picture = ResourceManager.ExplosionEffect5 ?? megaBoom2;
+                if (message.delay >= 5) picture = ResourceManager.ExplosionEffect1 ?? Peace_of_Tanks.Properties.Resources.Bao1;
+                else if (message.delay == 4) picture = ResourceManager.ExplosionEffect2 ?? Peace_of_Tanks.Properties.Resources.Bao2;
+                else if (message.delay == 3) picture = ResourceManager.ExplosionEffect3 ?? Peace_of_Tanks.Properties.Resources.Bao3;
+                else if (message.delay == 2) picture = ResourceManager.ExplosionEffect4 ?? Peace_of_Tanks.Properties.Resources.Bao4;
+                else if (message.delay == 1) picture = ResourceManager.ExplosionEffect5 ?? Peace_of_Tanks.Properties.Resources.Bao5;
                 message.delay--;
             }
         }
@@ -70,16 +63,16 @@ namespace Peace_of_Tanks
         {
             if (type == 0)
             {
-                if (delay >= 3) return ResourceManager.HitEffect1 ?? boom1;
-                if (delay == 2) return ResourceManager.HitEffect2 ?? boom2;
-                return ResourceManager.HitEffect3 ?? boom3;
+                if (delay >= 3) return ResourceManager.HitEffect1 ?? Peace_of_Tanks.Properties.Resources.Ji1;
+                if (delay == 2) return ResourceManager.HitEffect2 ?? Peace_of_Tanks.Properties.Resources.Ji2;
+                return ResourceManager.HitEffect3 ?? Peace_of_Tanks.Properties.Resources.Ji3;
             }
 
-            if (delay >= 5) return ResourceManager.ExplosionEffect1 ?? megaBoom1;
-            if (delay == 4) return ResourceManager.ExplosionEffect2 ?? megaBoom1;
-            if (delay == 3) return ResourceManager.ExplosionEffect3 ?? megaBoom2;
-            if (delay == 2) return ResourceManager.ExplosionEffect4 ?? megaBoom2;
-            return ResourceManager.ExplosionEffect5 ?? megaBoom2;
+            if (delay >= 5) return ResourceManager.ExplosionEffect1 ?? Peace_of_Tanks.Properties.Resources.Bao1;
+            if (delay == 4) return ResourceManager.ExplosionEffect2 ?? Peace_of_Tanks.Properties.Resources.Bao2;
+            if (delay == 3) return ResourceManager.ExplosionEffect3 ?? Peace_of_Tanks.Properties.Resources.Bao3;
+            if (delay == 2) return ResourceManager.ExplosionEffect4 ?? Peace_of_Tanks.Properties.Resources.Bao4;
+            return ResourceManager.ExplosionEffect5 ?? Peace_of_Tanks.Properties.Resources.Bao5;
         }
     }
 }

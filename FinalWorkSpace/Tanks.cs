@@ -659,7 +659,7 @@ namespace Peace_of_Tanks
             }
             if (message.pauseSpace < 0)
             {
-                Bullet bullet = new Bullet(Peace_of_Tanks.Properties.Resources.bulletEnemy, x, y, direction, 0, attack);
+                Bullet bullet = new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, direction, 0, attack);
                 message.pauseSpace = GameTiming.ScaleLegacyTicks(50);
                 bullets.Add(bullet);
             }
