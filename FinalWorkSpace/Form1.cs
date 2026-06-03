@@ -49,6 +49,7 @@ namespace Peace_of_Tanks
         private int player1Deaths;
         private int player2Deaths;
         private bool settlementShown;
+        private bool expRewarded;
         private readonly List<Control> settlementControls = new List<Control>();
 
         public bool ReturnToLobby { get { return returnToLobby; } }
@@ -867,6 +868,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            RewardExpForSettlement(results);
             settlementShown = true;
             timer1.Enabled = false;
             HideOverlayControls();
@@ -952,6 +954,34 @@ namespace Peace_of_Tanks
             };
         }
 
+        private void RewardExpForSettlement(List<PlayerResultSnapshot> results)
+        {
+            if (expRewarded || results == null || currentGameMode == GameMode.SinglePlayer)
+            {
+                return;
+            }
+
+            PlayerResultSnapshot localResult = results.FirstOrDefault(r => r.Name == GetLocalSettlementName());
+            int rank = localResult != null && localResult.Rank > 0 ? localResult.Rank : 1;
+            DataManager.RewardExp(currentGameMode, rank);
+            expRewarded = true;
+        }
+
+        private string GetLocalSettlementName()
+        {
+            if (networkMode && IsNetworkGuest)
+            {
+                return "玩家2";
+            }
+
+            if (!networkMode && currentGameMode == GameMode.SinglePlayer)
+            {
+                return "己方";
+            }
+
+            return "玩家1";
+        }
+
         private void ClearSettlementControls()
         {
             foreach (Control control in settlementControls)
@@ -973,6 +1003,7 @@ namespace Peace_of_Tanks
             player2Deaths = 0;
             baseDestroyed = false;
             settlementShown = false;
+            expRewarded = false;
             ClearSettlementControls();
         }
 
@@ -1673,19 +1704,6 @@ namespace Peace_of_Tanks
                     bufStat.points = setting.pointsPlayer2;
 
                     setting.stats2 = bufStat;
-
-                    // 奖励经验值（单人模式不奖励经验，只有匹配模式才奖励）
-                    if (currentGameMode == GameMode.TwoPlayer)
-                    {
-                        // 双人匹配模式：根据胜负奖励经验
-                        int rank = (setting.pointsPlayer1 > setting.pointsPlayer2) ? 1 : 2;
-                        DataManager.RewardExp(GameMode.TwoPlayer, rank);
-                    }
-                    else if (currentGameMode == GameMode.ThreePlayer)
-                    {
-                        // 三人匹配模式：根据排名奖励经验（这里暂时按第一名处理）
-                        DataManager.RewardExp(GameMode.ThreePlayer, 1);
-                    }
 
                     for (int i = 0; i < enemies.Count; i++)
                         MoveEnemy -= enemies[i].Move;

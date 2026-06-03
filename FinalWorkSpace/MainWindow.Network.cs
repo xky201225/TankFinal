@@ -72,7 +72,7 @@ namespace Peace_of_Tanks
             }
 
             networkHintLabel.Visible = modeMenu == 0 && !networkWaiting && !networkSessionStarted && (launchOptions == null || !launchOptions.StartImmediately);
-            networkStatusLabel.Visible = networkWaiting || (networkSessionStarted && !string.IsNullOrEmpty(networkStatusLabel.Text));
+            networkStatusLabel.Visible = networkWaiting;
             networkHintLabel.BringToFront();
             networkStatusLabel.BringToFront();
         }

@@ -1149,16 +1149,25 @@ namespace Peace_of_Tanks
                 DoubleBuffered = true;
             }
 
+            protected override void OnPaintBackground(PaintEventArgs e)
+            {
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(235, 5, 12, 22)))
+                {
+                    e.Graphics.FillRectangle(brush, ClientRectangle);
+                }
+            }
+
             protected override void OnPaint(PaintEventArgs e)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                DrawPanelFrame(e.Graphics, ClientRectangle, false);
                 using (Font titleFont = new Font("Microsoft YaHei UI", 26, FontStyle.Bold))
                 using (Font subFont = new Font("Microsoft YaHei UI", 14, FontStyle.Bold))
-                using (SolidBrush titleBrush = new SolidBrush(Color.White))
-                using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(235, 226, 236, 250)))
+                using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
+                using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(235, 236, 244, 255)))
                 {
-                    e.Graphics.DrawString(Title ?? string.Empty, titleFont, titleBrush, 0, 0);
-                    e.Graphics.DrawString(Subtitle ?? string.Empty, subFont, subBrush, 2, 48);
+                    e.Graphics.DrawString(Title ?? string.Empty, titleFont, titleBrush, 18, 6);
+                    e.Graphics.DrawString(Subtitle ?? string.Empty, subFont, subBrush, 20, 48);
                 }
             }
         }
@@ -1369,7 +1378,7 @@ namespace Peace_of_Tanks
                 }
 
                 using (Font nameFont = new Font("Microsoft YaHei UI", 15, FontStyle.Bold))
-                using (Font statsFont = new Font("Microsoft YaHei UI", 10, FontStyle.Bold))
+                using (Font statsFont = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold))
                 using (SolidBrush nameBrush = new SolidBrush(TankColor))
                 using (SolidBrush statsBrush = new SolidBrush(TankData != null && TankData.IsUnlocked ? Color.White : Color.FromArgb(180, 195, 210)))
                 {
@@ -1378,12 +1387,15 @@ namespace Peace_of_Tanks
                     string stats = string.Empty;
                     if (TankData != null && TankConfig != null)
                     {
+                        int level = TankData.IsUnlocked ? TankData.Level : 1;
+                        int attack = TankConfig.GetAttackAtLevel(level);
+                        int health = TankConfig.GetHealthAtLevel(level);
                         stats = TankData.IsUnlocked
-                            ? "等级 " + TankData.Level + "/5\n升级 " + GetUpgradeCostText() + "\n经验 " + (PlayerData != null ? PlayerData.TotalExp : 0)
-                            : "未解锁\n需要经验 " + TankConfig.UnlockExp;
+                            ? "等级 " + TankData.Level + "/5\n攻击 " + attack + "\n生命 " + health + "\n升级 " + GetUpgradeCostText()
+                            : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n解锁 " + TankConfig.UnlockExp;
                     }
 
-                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 58, 118, 60));
+                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 52, 124, 70));
                 }
 
                 if (IsSelected)

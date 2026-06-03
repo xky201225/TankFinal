@@ -371,7 +371,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            currentPlayerData = MapPayloadToPlayerData(serverPayload, currentPlayerData.UserId);
+            ApplyPayloadToPlayerData(currentPlayerData, serverPayload, currentPlayerData.UserId);
             SaveJsonFallback();
         }
 
@@ -447,20 +447,24 @@ namespace Peace_of_Tanks
 
         private static PlayerData MapPayloadToPlayerData(UserSyncPayload payload, int existingUserId)
         {
-            if (payload == null)
+            PlayerData playerData = new PlayerData();
+            ApplyPayloadToPlayerData(playerData, payload, existingUserId);
+            return playerData;
+        }
+
+        private static void ApplyPayloadToPlayerData(PlayerData playerData, UserSyncPayload payload, int existingUserId)
+        {
+            if (playerData == null || payload == null)
             {
-                return new PlayerData();
+                return;
             }
 
-            PlayerData playerData = new PlayerData
-            {
-                UserId = existingUserId,
-                UserName = payload.UserName,
-                TotalExp = payload.TotalExp,
-                SelectedTank = ParseTankType(payload.SelectedTank)
-            };
+            playerData.UserId = existingUserId;
+            playerData.UserName = payload.UserName ?? string.Empty;
+            playerData.TotalExp = payload.TotalExp;
+            playerData.SelectedTank = ParseTankType(payload.SelectedTank);
 
-            foreach (TankSyncPayload tank in payload.Tanks)
+            foreach (TankSyncPayload tank in payload.Tanks ?? new List<TankSyncPayload>())
             {
                 TankType tankType = ParseTankType(tank.TankType);
                 playerData.Tanks[tankType] = new PlayerTankData
@@ -471,8 +475,6 @@ namespace Peace_of_Tanks
                     IsUnlocked = tank.IsUnlocked
                 };
             }
-
-            return playerData;
         }
 
         private static TankType ParseTankType(int value)
