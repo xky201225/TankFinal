@@ -27,7 +27,10 @@ namespace Peace_of_Tanks
 
             txtHost = new TextBox { Left = 120, Top = 18, Width = 170, Text = "127.0.0.1" };
             txtPort = new TextBox { Left = 120, Top = 58, Width = 170, Text = "51888" };
-            txtName = new TextBox { Left = 120, Top = 98, Width = 170, Text = "玩家" + Environment.UserName };
+            string defaultPlayerName = DataManager.CurrentPlayer != null && !string.IsNullOrWhiteSpace(DataManager.CurrentPlayer.UserName)
+                ? DataManager.CurrentPlayer.UserName
+                : "玩家" + Environment.UserName;
+            txtName = new TextBox { Left = 120, Top = 98, Width = 170, Text = defaultPlayerName };
             cboDifficulty = new ComboBox
             {
                 Left = 120,
@@ -89,6 +92,7 @@ namespace Peace_of_Tanks
                 ServerHost = txtHost.Text.Trim(),
                 ServerPort = port,
                 PlayerName = txtName.Text.Trim(),
+                TankType = DataManager.CurrentPlayer.SelectedTank,
                 Difficulty = (NetworkDifficulty)cboDifficulty.SelectedIndex
             };
         }

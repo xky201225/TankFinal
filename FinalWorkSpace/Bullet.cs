@@ -5,7 +5,11 @@ namespace Peace_of_Tanks
 {
     public class Bullet
     {
-        private const double Speed = 62.5;
+        private const int BulletSize = 10;
+        private const int TankSize = 50;
+        private const int TankCenterOffset = (TankSize - BulletSize) / 2;
+        private static readonly double Speed = GameTiming.ScaleDistance(62.5);
+        private const double CollisionStep = 5.0;
         private readonly Bitmap pictureBullet;
         private double preciseX;
         private double preciseY;
@@ -29,6 +33,11 @@ namespace Peace_of_Tanks
         public int Direction
         {
             get { return direction; }
+        }
+
+        public int MoveStepCount
+        {
+            get { return (int)Math.Ceiling(Speed / CollisionStep); }
         }
 
         public Bullet(Bitmap picture, int x, int y, int direction, int who)
@@ -60,23 +69,23 @@ namespace Peace_of_Tanks
         {
             if (direction == 0)
             {
-                preciseX -= 20;
-                preciseY += 20;
+                preciseX -= BulletSize;
+                preciseY += TankCenterOffset;
             }
             if (direction == 1)
             {
-                preciseX += 60;
-                preciseY += 20;
+                preciseX += TankSize;
+                preciseY += TankCenterOffset;
             }
             if (direction == 2)
             {
-                preciseX += 20;
-                preciseY -= 20;
+                preciseX += TankCenterOffset;
+                preciseY -= BulletSize;
             }
             if (direction == 3)
             {
-                preciseX += 20;
-                preciseY += 60;
+                preciseX += TankCenterOffset;
+                preciseY += TankSize;
             }
         }
 
@@ -89,27 +98,46 @@ namespace Peace_of_Tanks
 
         public void Move()
         {
+            for (int i = 0; i < MoveStepCount; i++)
+            {
+                MoveStep(i);
+            }
+        }
+
+        public void MoveStep(int stepIndex)
+        {
+            double distance = Math.Min(CollisionStep, Speed - CollisionStep * stepIndex);
+            if (distance <= 0)
+            {
+                return;
+            }
+
+            MoveBy(distance);
+        }
+
+        private void MoveBy(double distance)
+        {
             if (direction == 0)
             {
-                preciseX -= Speed;
+                preciseX -= distance;
             }
             if (direction == 2)
             {
-                preciseY -= Speed;
+                preciseY -= distance;
             }
             if (direction == 1)
             {
-                preciseX += Speed;
+                preciseX += distance;
             }
             if (direction == 3)
             {
-                preciseY += Speed;
+                preciseY += distance;
             }
         }
 
         public void Draw(Graphics grMemory)
         {
-            grMemory.DrawImage(pictureBullet, x, y, 10, 10);
+            grMemory.DrawImage(pictureBullet, x, y, BulletSize, BulletSize);
         }
     }
 }

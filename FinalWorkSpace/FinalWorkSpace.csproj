@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Remove="MainWindow.Network.resx" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="font\FontBit.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -37,5 +41,9 @@
     <Content Include="Resources\Effects\*.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.26" />
   </ItemGroup>
 </Project>

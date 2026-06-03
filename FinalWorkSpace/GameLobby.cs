@@ -23,6 +23,10 @@ namespace Peace_of_Tanks
         private TextBox chatInput;
         private Label chatStatusLabel;
         private string chatPlayerName;
+        private string lobbyServerHost = DefaultChatHost;
+        private int lobbyServerPort = DefaultChatPort;
+        private bool lobbyServerPromptShown;
+        private bool useAuthenticatedServer;
 
         public GameMode SelectedMode { get { return selectedMode; } }
         public TankType SelectedTank { get { return selectedTank; } }
@@ -44,7 +48,14 @@ namespace Peace_of_Tanks
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             playerData = DataManager.CurrentPlayer;
             selectedTank = playerData.SelectedTank;
-            chatPlayerName = "玩家" + Environment.UserName;
+            useAuthenticatedServer = DataManager.HasAuthenticatedServer;
+            if (useAuthenticatedServer)
+            {
+                lobbyServerHost = DataManager.CurrentServerHost;
+                lobbyServerPort = DataManager.CurrentServerPort;
+                lobbyServerPromptShown = true;
+            }
+            chatPlayerName = string.IsNullOrWhiteSpace(playerData.UserName) ? "玩家" + Environment.UserName : playerData.UserName;
             InitializeComponent();
         }
 
@@ -58,9 +69,21 @@ namespace Peace_of_Tanks
             MaximizeBox = false;
             DoubleBuffered = true;
             Resize += (s, e) => Invalidate();
+            Shown += GameLobby_Shown;
 
             BuildChrome();
             ShowHomePage();
+        }
+
+        private void GameLobby_Shown(object sender, EventArgs e)
+        {
+            if (useAuthenticatedServer)
+            {
+                ConnectLobbyChat();
+                return;
+            }
+
+            PromptForLobbyServerIfNeeded();
         }
 
         protected override void OnFormClosed(FormClosedEventArgs e)
@@ -174,7 +197,147 @@ namespace Peace_of_Tanks
             pageControls.Add(CreateChatPanel());
 
             AddPageControls();
-            ConnectLobbyChat();
+            if (lobbyServerPromptShown)
+            {
+                ConnectLobbyChat();
+            }
+        }
+
+        private void PromptForLobbyServerIfNeeded()
+        {
+            if (lobbyServerPromptShown || IsDisposed)
+            {
+                return;
+            }
+
+            lobbyServerPromptShown = true;
+            if (chatClient != null && chatClient.IsConnected)
+            {
+                SetChatStatus("聊天服务器已连接");
+                return;
+            }
+
+            ShowLobbyServerDialog();
+        }
+
+        private bool ShowLobbyServerDialog()
+        {
+            if (chatClient != null && chatClient.IsConnected)
+            {
+                SetChatStatus("聊天服务器已连接");
+                return true;
+            }
+
+            using (Form dialog = new Form())
+            {
+                dialog.Text = "服务器设置";
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.ClientSize = new Size(330, 145);
+                dialog.ShowInTaskbar = false;
+
+                Label hostLabel = new Label { Text = "服务器地址", Left = 22, Top = 22, Width = 90, AutoSize = true };
+                TextBox hostText = new TextBox { Left = 120, Top = 18, Width = 180, Text = lobbyServerHost };
+                Label portLabel = new Label { Text = "端口", Left = 22, Top = 62, Width = 90, AutoSize = true };
+                TextBox portText = new TextBox { Left = 120, Top = 58, Width = 180, Text = lobbyServerPort.ToString() };
+
+                Button okButton = new Button { Text = "确定", Left = 120, Top = 100, Width = 80, DialogResult = DialogResult.OK };
+                Button cancelButton = new Button { Text = "取消", Left = 220, Top = 100, Width = 80, DialogResult = DialogResult.Cancel };
+
+                dialog.Controls.AddRange(new Control[] { hostLabel, hostText, portLabel, portText, okButton, cancelButton });
+                dialog.AcceptButton = okButton;
+                dialog.CancelButton = cancelButton;
+
+                while (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    string host = hostText.Text.Trim();
+                    int port;
+                    if (host.Length == 0)
+                    {
+                        MessageBox.Show(this, "请输入服务器地址。", "服务器设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        continue;
+                    }
+
+                    if (!int.TryParse(portText.Text.Trim(), out port) || port <= 0 || port > 65535)
+                    {
+                        MessageBox.Show(this, "请输入有效端口。", "服务器设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        continue;
+                    }
+
+                    lobbyServerHost = host;
+                    lobbyServerPort = port;
+
+                    string error;
+                    if (ReconnectLobbyChat(out error))
+                    {
+                        return true;
+                    }
+
+                    MessageBox.Show(
+                        this,
+                        "连接服务器失败：" + error + Environment.NewLine + "当前只能进行单机游戏，请重新输入服务器地址。",
+                        "服务器设置",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+            }
+
+            return ReconnectLobbyChat();
+        }
+
+        private bool ReconnectLobbyChat()
+        {
+            string error;
+            return ReconnectLobbyChat(out error);
+        }
+
+        private bool ReconnectLobbyChat(out string error)
+        {
+            if (chatClient != null && chatClient.IsConnected)
+            {
+                error = string.Empty;
+                SetChatStatus("聊天服务器已连接");
+                return true;
+            }
+
+            CloseLobbyChat();
+            return ConnectLobbyChat(out error);
+        }
+
+        private bool EnsureServerReady(string host, int port)
+        {
+            string targetHost = string.IsNullOrWhiteSpace(host) ? DefaultChatHost : host.Trim();
+            bool serverChanged = !string.Equals(lobbyServerHost, targetHost, StringComparison.OrdinalIgnoreCase) || lobbyServerPort != port;
+            if (!serverChanged && chatClient != null && chatClient.IsConnected)
+            {
+                SetChatStatus("聊天服务器已连接");
+                return true;
+            }
+
+            lobbyServerHost = targetHost;
+            lobbyServerPort = port;
+
+            if (serverChanged)
+            {
+                CloseLobbyChat();
+            }
+
+            string error;
+            if (ConnectLobbyChat(out error))
+            {
+                return true;
+            }
+
+            MessageBox.Show(
+                this,
+                "连接服务器失败：" + error + Environment.NewLine + "当前只能进行单机游戏，请重新输入服务器地址。",
+                "服务器连接失败",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return ShowLobbyServerDialog();
         }
 
         private Control CreateChatPanel()
@@ -353,9 +516,9 @@ namespace Peace_of_Tanks
             });
 
             HudPanel panel = new HudPanel { Size = new Size(420, 470), Location = new Point(285, 160), BackColor = Color.FromArgb(14, 24, 36) };
-            TextBox host = AddField(panel, "服务器地址", "127.0.0.1", 24, 24);
-            TextBox port = AddField(panel, "端口", "51888", 230, 24);
-            TextBox name = AddField(panel, "玩家名称", "玩家" + Environment.UserName, 24, 92);
+            TextBox host = AddField(panel, "服务器地址", lobbyServerHost, 24, 24);
+            TextBox port = AddField(panel, "端口", lobbyServerPort.ToString(), 230, 24);
+            TextBox name = AddField(panel, "玩家名称", chatPlayerName, 24, 92);
             TextBox roomId = AddField(panel, "房间号", "ROOM-" + DateTime.Now.ToString("HHmm"), 230, 92);
 
             ComboBox playerCount = AddCombo(panel, "匹配人数", new object[] { "双人模式", "三人模式" }, 24, 164);
@@ -698,11 +861,16 @@ namespace Peace_of_Tanks
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty)
         {
-            StartNetworkMatch(joinMode, roomId, difficulty, DefaultChatHost, DefaultChatPort, chatPlayerName, 2, BattleRuleMode.FreeBattle, BattleMapFactory.CreateSystemMap(0));
+            StartNetworkMatch(joinMode, roomId, difficulty, lobbyServerHost, lobbyServerPort, chatPlayerName, 2, BattleRuleMode.FreeBattle, BattleMapFactory.CreateSystemMap(0));
         }
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty, string host, int port, string playerName, int playerCount, BattleRuleMode battleRule, GameMapConfig mapConfig)
         {
+            if (!EnsureServerReady(host, port))
+            {
+                return;
+            }
+
             selectedMode = playerCount == 3 ? GameMode.ThreePlayer : GameMode.TwoPlayer;
             launchOptions = new GameLaunchOptions
             {
@@ -719,6 +887,7 @@ namespace Peace_of_Tanks
                     ServerHost = string.IsNullOrWhiteSpace(host) ? DefaultChatHost : host.Trim(),
                     ServerPort = port,
                     PlayerName = string.IsNullOrWhiteSpace(playerName) ? chatPlayerName : playerName.Trim(),
+                    TankType = selectedTank,
                     Difficulty = difficulty,
                     JoinMode = joinMode,
                     RoomId = roomId ?? string.Empty,
@@ -733,6 +902,13 @@ namespace Peace_of_Tanks
 
         private bool ConnectLobbyChat()
         {
+            string error;
+            return ConnectLobbyChat(out error);
+        }
+
+        private bool ConnectLobbyChat(out string error)
+        {
+            error = string.Empty;
             if (chatClient != null && chatClient.IsConnected)
             {
                 SetChatStatus("聊天服务器已连接");
@@ -744,8 +920,7 @@ namespace Peace_of_Tanks
             chatClient.LineReceived += ChatClient_LineReceived;
             chatClient.Disconnected += ChatClient_Disconnected;
 
-            string error;
-            if (!chatClient.ConnectLobby(DefaultChatHost, DefaultChatPort, chatPlayerName, out error))
+            if (!chatClient.ConnectLobby(lobbyServerHost, lobbyServerPort, chatPlayerName, out error))
             {
                 CloseLobbyChat();
                 SetChatStatus("聊天服务器未连接：" + error);

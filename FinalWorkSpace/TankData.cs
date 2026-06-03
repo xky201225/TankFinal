@@ -1,34 +1,34 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Threading;
+using System.Windows.Forms;
+using Peace_of_Tanks.Models;
 
 namespace Peace_of_Tanks
 {
-    // 坦克类型枚举
     public enum TankType
     {
-        Green = 0,   // 绿色 Lv.png
-        Yellow = 1,  // 黄色 Huang.png
-        Blue = 2,    // 蓝色 Lan.png
-        Red = 3,     // 红色 Hong.png
-        Purple = 4   // 紫色 Zi.png
+        Green = 0,
+        Yellow = 1,
+        Blue = 2,
+        Red = 3,
+        Purple = 4
     }
 
-    // 坦克配置信息
     public class TankConfig
     {
         public TankType Type { get; set; }
         public string ImageName { get; set; }
         public int BaseAttack { get; set; }
         public int BaseHealth { get; set; }
-        public int UnlockExp { get; set; }  // 解锁所需经验
+        public int UnlockExp { get; set; }
         public int AttackPerLevel { get; set; } = 5;
         public int HealthPerLevel { get; set; } = 10;
         public int MaxLevel { get; set; } = 5;
 
-        // 获取指定等级的属性
         public int GetAttackAtLevel(int level)
         {
             return BaseAttack + (level - 1) * AttackPerLevel;
@@ -39,80 +39,72 @@ namespace Peace_of_Tanks
             return BaseHealth + (level - 1) * HealthPerLevel;
         }
 
-        // 获取升级所需经验
         public static int GetExpForUpgrade(int currentLevel)
         {
-            // 第一次升级需要10，之后每次递增10
             return currentLevel * 10;
         }
     }
 
-    // 坦克配置管理
     public static class TankConfigs
     {
-        private static Dictionary<TankType, TankConfig> configs;
-
-        static TankConfigs()
+        private static readonly Dictionary<TankType, TankConfig> configs = new Dictionary<TankType, TankConfig>
         {
-            configs = new Dictionary<TankType, TankConfig>
             {
+                TankType.Green,
+                new TankConfig
                 {
-                    TankType.Green,
-                    new TankConfig
-                    {
-                        Type = TankType.Green,
-                        ImageName = "Lv.png",
-                        BaseAttack = 10,
-                        BaseHealth = 30,
-                        UnlockExp = 0  // 初始解锁
-                    }
-                },
-                {
-                    TankType.Yellow,
-                    new TankConfig
-                    {
-                        Type = TankType.Yellow,
-                        ImageName = "Huang.png",
-                        BaseAttack = 15,
-                        BaseHealth = 40,
-                        UnlockExp = 50
-                    }
-                },
-                {
-                    TankType.Blue,
-                    new TankConfig
-                    {
-                        Type = TankType.Blue,
-                        ImageName = "Lan.png",
-                        BaseAttack = 20,
-                        BaseHealth = 60,
-                        UnlockExp = 80
-                    }
-                },
-                {
-                    TankType.Red,
-                    new TankConfig
-                    {
-                        Type = TankType.Red,
-                        ImageName = "Hong.png",
-                        BaseAttack = 25,
-                        BaseHealth = 80,
-                        UnlockExp = 120
-                    }
-                },
-                {
-                    TankType.Purple,
-                    new TankConfig
-                    {
-                        Type = TankType.Purple,
-                        ImageName = "Zi.png",
-                        BaseAttack = 30,
-                        BaseHealth = 100,
-                        UnlockExp = 150
-                    }
+                    Type = TankType.Green,
+                    ImageName = "Lv.png",
+                    BaseAttack = 10,
+                    BaseHealth = 30,
+                    UnlockExp = 0
                 }
-            };
-        }
+            },
+            {
+                TankType.Yellow,
+                new TankConfig
+                {
+                    Type = TankType.Yellow,
+                    ImageName = "Huang.png",
+                    BaseAttack = 15,
+                    BaseHealth = 40,
+                    UnlockExp = 50
+                }
+            },
+            {
+                TankType.Blue,
+                new TankConfig
+                {
+                    Type = TankType.Blue,
+                    ImageName = "Lan.png",
+                    BaseAttack = 20,
+                    BaseHealth = 60,
+                    UnlockExp = 80
+                }
+            },
+            {
+                TankType.Red,
+                new TankConfig
+                {
+                    Type = TankType.Red,
+                    ImageName = "Hong.png",
+                    BaseAttack = 25,
+                    BaseHealth = 80,
+                    UnlockExp = 120
+                }
+            },
+            {
+                TankType.Purple,
+                new TankConfig
+                {
+                    Type = TankType.Purple,
+                    ImageName = "Zi.png",
+                    BaseAttack = 30,
+                    BaseHealth = 100,
+                    UnlockExp = 150
+                }
+            }
+        };
 
         public static TankConfig GetConfig(TankType type)
         {
@@ -121,7 +113,7 @@ namespace Peace_of_Tanks
 
         public static TankConfig[] GetAllConfigs()
         {
-            return new TankConfig[]
+            return new[]
             {
                 configs[TankType.Green],
                 configs[TankType.Yellow],
@@ -132,7 +124,6 @@ namespace Peace_of_Tanks
         }
     }
 
-    // 玩家坦克数据
     public class PlayerTankData
     {
         public TankType Type { get; set; }
@@ -142,7 +133,11 @@ namespace Peace_of_Tanks
 
         public int GetExpForNextLevel()
         {
-            if (Level >= 5) return -1;  // 已满级
+            if (Level >= 5)
+            {
+                return -1;
+            }
+
             return TankConfig.GetExpForUpgrade(Level);
         }
 
@@ -152,9 +147,10 @@ namespace Peace_of_Tanks
         }
     }
 
-    // 玩家数据
     public class PlayerData
     {
+        public int UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
         public int TotalExp { get; set; } = 0;
         public Dictionary<TankType, PlayerTankData> Tanks { get; set; }
         public TankType SelectedTank { get; set; } = TankType.Green;
@@ -162,8 +158,6 @@ namespace Peace_of_Tanks
         public PlayerData()
         {
             Tanks = new Dictionary<TankType, PlayerTankData>();
-
-            // 初始化所有坦克数据
             foreach (TankType type in Enum.GetValues(typeof(TankType)))
             {
                 Tanks[type] = new PlayerTankData
@@ -171,22 +165,19 @@ namespace Peace_of_Tanks
                     Type = type,
                     Level = 1,
                     CurrentExp = 0,
-                    IsUnlocked = type == TankType.Green  // 只有绿色坦克初始解锁
+                    IsUnlocked = type == TankType.Green
                 };
             }
         }
 
-        // 添加经验值
         public void AddExp(int exp)
         {
             TotalExp += exp;
-
-            // 检查是否可以解锁新坦克
-            foreach (var tank in Tanks.Values)
+            foreach (PlayerTankData tank in Tanks.Values)
             {
                 if (!tank.IsUnlocked)
                 {
-                    var config = TankConfigs.GetConfig(tank.Type);
+                    TankConfig config = TankConfigs.GetConfig(tank.Type);
                     if (TotalExp >= config.UnlockExp)
                     {
                         tank.IsUnlocked = true;
@@ -195,15 +186,18 @@ namespace Peace_of_Tanks
             }
         }
 
-        // 升级坦克
         public bool UpgradeTank(TankType type)
         {
             if (!Tanks.ContainsKey(type))
+            {
                 return false;
+            }
 
-            var tank = Tanks[type];
+            PlayerTankData tank = Tanks[type];
             if (!tank.CanUpgrade())
+            {
                 return false;
+            }
 
             int expNeeded = tank.GetExpForNextLevel();
             tank.CurrentExp -= expNeeded;
@@ -211,19 +205,24 @@ namespace Peace_of_Tanks
             return true;
         }
 
-        // 添加坦克经验（用于坦克升级）
         public bool UnlockTank(TankType type)
         {
             if (!Tanks.ContainsKey(type))
+            {
                 return false;
+            }
 
-            var tank = Tanks[type];
+            PlayerTankData tank = Tanks[type];
             if (tank.IsUnlocked)
+            {
                 return false;
+            }
 
-            var config = TankConfigs.GetConfig(type);
+            TankConfig config = TankConfigs.GetConfig(type);
             if (TotalExp < config.UnlockExp)
+            {
                 return false;
+            }
 
             tank.IsUnlocked = true;
             return true;
@@ -237,36 +236,53 @@ namespace Peace_of_Tanks
             }
         }
 
-        // 获取当前选中坦克的攻击力
         public int GetSelectedTankAttack()
         {
-            var tank = Tanks[SelectedTank];
-            var config = TankConfigs.GetConfig(SelectedTank);
+            PlayerTankData tank = Tanks[SelectedTank];
+            TankConfig config = TankConfigs.GetConfig(SelectedTank);
             return config.GetAttackAtLevel(tank.Level);
         }
 
-        // 获取当前选中坦克的生命力
         public int GetSelectedTankHealth()
         {
-            var tank = Tanks[SelectedTank];
-            var config = TankConfigs.GetConfig(SelectedTank);
+            PlayerTankData tank = Tanks[SelectedTank];
+            TankConfig config = TankConfigs.GetConfig(SelectedTank);
             return config.GetHealthAtLevel(tank.Level);
         }
     }
 
-    // 游戏模式
     public enum GameMode
     {
-        SinglePlayer,  // 单人模式
-        TwoPlayer,     // 双人匹配
-        ThreePlayer    // 三人匹配
+        SinglePlayer,
+        TwoPlayer,
+        ThreePlayer
     }
 
-    // 数据管理器
     public static class DataManager
     {
-        private static string dataFilePath = "playerdata.json";
+        private static readonly string JsonFallbackPath = AppPaths.GetDataPath("playerdata.json");
+        private const string DefaultRegisterHost = "127.0.0.1";
+        private const int DefaultRegisterPort = 51888;
+        private static string currentServerHost = DefaultRegisterHost;
+        private static int currentServerPort = DefaultRegisterPort;
+        private static string currentAuthToken = string.Empty;
+        private static System.Threading.Timer syncTimer;
         private static PlayerData currentPlayerData;
+
+        public static string CurrentServerHost
+        {
+            get { return currentServerHost; }
+        }
+
+        public static int CurrentServerPort
+        {
+            get { return currentServerPort; }
+        }
+
+        public static bool HasAuthenticatedServer
+        {
+            get { return !string.IsNullOrWhiteSpace(currentAuthToken); }
+        }
 
         public static PlayerData CurrentPlayer
         {
@@ -276,6 +292,7 @@ namespace Peace_of_Tanks
                 {
                     LoadData();
                 }
+
                 return currentPlayerData;
             }
         }
@@ -284,52 +301,48 @@ namespace Peace_of_Tanks
         {
             try
             {
-                if (File.Exists(dataFilePath))
+                using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
                 {
-                    string json = File.ReadAllText(dataFilePath);
-                    currentPlayerData = JsonSerializer.Deserialize<PlayerData>(json);
-                }
-                else
-                {
-                    currentPlayerData = new PlayerData();
+                    currentPlayerData = AuthenticateUser();
                     SaveData();
+                    SyncWithServer();
+                    StartSyncTimer();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                currentPlayerData = new PlayerData();
+                LoadJsonFallback();
+                MessageBox.Show("加载数据库数据失败，已使用本地临时数据：" + ex.Message);
             }
         }
 
         public static void SaveData()
         {
+            if (currentPlayerData == null)
+            {
+                return;
+            }
+
             try
             {
-                var options = new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                };
-                string json = JsonSerializer.Serialize(currentPlayerData, options);
-                File.WriteAllText(dataFilePath, json);
+                SaveToLocalDatabase(currentPlayerData);
             }
             catch (Exception ex)
             {
-                System.Windows.Forms.MessageBox.Show("保存数据失败: " + ex.Message);
+                SaveJsonFallback();
+                MessageBox.Show("保存数据库数据失败，已临时保存到本地 JSON：" + ex.Message);
             }
         }
 
-        // 奖励经验
         public static void RewardExp(GameMode mode, int rank)
         {
             int exp = 0;
-
             switch (mode)
             {
                 case GameMode.TwoPlayer:
-                    exp = rank == 1 ? 15 : 10;  // 获胜15，失败10
+                    exp = rank == 1 ? 15 : 10;
                     break;
                 case GameMode.ThreePlayer:
-                    // 第一名15，第二名10，第三名5
                     exp = rank == 1 ? 15 : (rank == 2 ? 10 : 5);
                     break;
             }
@@ -337,9 +350,291 @@ namespace Peace_of_Tanks
             if (exp > 0)
             {
                 CurrentPlayer.AddExp(exp);
-                // 也给当前使用的坦克添加经验
                 CurrentPlayer.AddTankExp(CurrentPlayer.SelectedTank, exp);
                 SaveData();
+            }
+        }
+
+        public static void SyncWithServer()
+        {
+            if (currentPlayerData == null || string.IsNullOrWhiteSpace(currentPlayerData.UserName))
+            {
+                return;
+            }
+
+            string error;
+            UserSyncPayload serverPayload;
+            if (!TcpGameClient.SyncUser(currentServerHost, currentServerPort, currentPlayerData.UserName, currentAuthToken, MapPlayerDataToPayload(currentPlayerData), out serverPayload, out error))
+            {
+                return;
+            }
+
+            currentPlayerData = MapPayloadToPlayerData(serverPayload, currentPlayerData.UserId);
+            SaveToLocalDatabase(currentPlayerData);
+        }
+
+        private static PlayerData AuthenticateUser()
+        {
+            while (true)
+            {
+                AuthRequest request;
+                if (!AuthDialog.ShowDialog(currentServerHost, currentServerPort, out request))
+                {
+                    MessageBox.Show("进入游戏必须登录或注册。", "用户登录", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    continue;
+                }
+
+                string error;
+                currentServerHost = request.ServerHost;
+                currentServerPort = request.ServerPort;
+
+                if (request.IsRegister)
+                {
+                    if (!TcpGameClient.RegisterUser(request.ServerHost, request.ServerPort, request.UserName, request.Password, out error))
+                    {
+                        MessageBox.Show("注册失败：" + error, "用户注册", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        continue;
+                    }
+                }
+
+                UserSyncPayload payload;
+                string authToken;
+                if (!TcpGameClient.LoginUser(request.ServerHost, request.ServerPort, request.UserName, request.Password, out payload, out authToken, out error))
+                {
+                    MessageBox.Show("登录失败：" + error, "用户登录", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    continue;
+                }
+
+                currentAuthToken = authToken;
+                return MapPayloadToPlayerData(payload, 0);
+            }
+        }
+
+        private static void StartSyncTimer()
+        {
+            if (syncTimer != null)
+            {
+                return;
+            }
+
+            syncTimer = new System.Threading.Timer(_ => SyncWithServer(), null, TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(30));
+        }
+
+        private static void SaveToLocalDatabase(PlayerData playerData)
+        {
+            using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
+            {
+                User user = null;
+                if (playerData.UserId > 0)
+                {
+                    user = db.Users.FirstOrDefault(u => u.Id == playerData.UserId);
+                }
+
+                if (user == null && !string.IsNullOrWhiteSpace(playerData.UserName))
+                {
+                    user = db.Users.FirstOrDefault(u => u.UserName == playerData.UserName);
+                }
+
+                if (user == null)
+                {
+                    user = CreateUserEntity(playerData.UserName);
+                    db.Users.Add(user);
+                    db.SaveChanges();
+                }
+
+                user.UserName = playerData.UserName.Trim();
+                user.TotalExp = playerData.TotalExp;
+                user.SelectedTank = (int)playerData.SelectedTank;
+                user.UpdatedAt = DateTime.UtcNow;
+                db.SaveChanges();
+
+                playerData.UserId = user.Id;
+                SaveTankData(db, user.Id, playerData);
+            }
+        }
+
+        private static PlayerData MapUserToPlayerData(LocalDBMSSQLLocalDBContext db, User user)
+        {
+            PlayerData playerData = new PlayerData
+            {
+                UserId = user.Id,
+                UserName = user.UserName,
+                TotalExp = user.TotalExp,
+                SelectedTank = (TankType)user.SelectedTank
+            };
+
+            foreach (UserTank tankRow in db.UserTanks.Where(t => t.UserId == user.Id).ToList())
+            {
+                TankType tankType = (TankType)tankRow.TankType;
+                playerData.Tanks[tankType] = new PlayerTankData
+                {
+                    Type = tankType,
+                    Level = tankRow.Level,
+                    CurrentExp = tankRow.CurrentExp,
+                    IsUnlocked = tankRow.IsUnlocked
+                };
+            }
+
+            EnsureAllTankRows(db, user.Id, playerData);
+            return playerData;
+        }
+
+        private static User CreateUserEntity(string userName)
+        {
+            DateTime now = DateTime.UtcNow;
+            return new User
+            {
+                UserName = string.IsNullOrWhiteSpace(userName) ? "玩家" + Environment.UserName : userName.Trim(),
+                PasswordHash = "LOCAL_ONLY",
+                TotalExp = 0,
+                SelectedTank = 0,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+        }
+
+        private static UserSyncPayload MapPlayerDataToPayload(PlayerData playerData)
+        {
+            UserSyncPayload payload = new UserSyncPayload
+            {
+                UserName = playerData.UserName,
+                TotalExp = playerData.TotalExp,
+                SelectedTank = (int)playerData.SelectedTank
+            };
+
+            foreach (KeyValuePair<TankType, PlayerTankData> pair in playerData.Tanks)
+            {
+                payload.Tanks.Add(new TankSyncPayload
+                {
+                    TankType = (int)pair.Key,
+                    Level = pair.Value.Level,
+                    CurrentExp = pair.Value.CurrentExp,
+                    IsUnlocked = pair.Value.IsUnlocked
+                });
+            }
+
+            return payload;
+        }
+
+        private static PlayerData MapPayloadToPlayerData(UserSyncPayload payload, int existingUserId)
+        {
+            PlayerData playerData = new PlayerData
+            {
+                UserId = existingUserId,
+                UserName = payload.UserName,
+                TotalExp = payload.TotalExp,
+                SelectedTank = (TankType)payload.SelectedTank
+            };
+
+            foreach (TankSyncPayload tank in payload.Tanks)
+            {
+                TankType tankType = (TankType)tank.TankType;
+                playerData.Tanks[tankType] = new PlayerTankData
+                {
+                    Type = tankType,
+                    Level = tank.Level,
+                    CurrentExp = tank.CurrentExp,
+                    IsUnlocked = tank.IsUnlocked
+                };
+            }
+
+            return playerData;
+        }
+
+        private static void EnsureAllTankRows(LocalDBMSSQLLocalDBContext db, int userId, PlayerData playerData)
+        {
+            bool changed = false;
+            foreach (TankType type in Enum.GetValues(typeof(TankType)))
+            {
+                if (!playerData.Tanks.ContainsKey(type))
+                {
+                    playerData.Tanks[type] = new PlayerTankData
+                    {
+                        Type = type,
+                        Level = 1,
+                        CurrentExp = 0,
+                        IsUnlocked = type == TankType.Green
+                    };
+                }
+
+                int tankType = (int)type;
+                if (!db.UserTanks.Any(t => t.UserId == userId && t.TankType == tankType))
+                {
+                    PlayerTankData tankData = playerData.Tanks[type];
+                    db.UserTanks.Add(new UserTank
+                    {
+                        UserId = userId,
+                        TankType = tankType,
+                        Level = tankData.Level,
+                        CurrentExp = tankData.CurrentExp,
+                        IsUnlocked = tankData.IsUnlocked
+                    });
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                db.SaveChanges();
+            }
+        }
+
+        private static void SaveTankData(LocalDBMSSQLLocalDBContext db, int userId, PlayerData playerData)
+        {
+            EnsureAllTankRows(db, userId, playerData);
+            foreach (KeyValuePair<TankType, PlayerTankData> pair in playerData.Tanks)
+            {
+                int tankType = (int)pair.Key;
+                UserTank tankRow = db.UserTanks.FirstOrDefault(t => t.UserId == userId && t.TankType == tankType);
+                if (tankRow == null)
+                {
+                    continue;
+                }
+
+                tankRow.Level = pair.Value.Level;
+                tankRow.CurrentExp = pair.Value.CurrentExp;
+                tankRow.IsUnlocked = pair.Value.IsUnlocked;
+            }
+
+            db.SaveChanges();
+        }
+
+        private static void LoadJsonFallback()
+        {
+            try
+            {
+                if (File.Exists(JsonFallbackPath))
+                {
+                    string json = File.ReadAllText(JsonFallbackPath);
+                    currentPlayerData = JsonSerializer.Deserialize<PlayerData>(json);
+                }
+            }
+            catch
+            {
+            }
+
+            if (currentPlayerData == null)
+            {
+                currentPlayerData = new PlayerData
+                {
+                    UserName = "玩家" + Environment.UserName
+                };
+            }
+        }
+
+        private static void SaveJsonFallback()
+        {
+            try
+            {
+                JsonSerializerOptions options = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
+                string json = JsonSerializer.Serialize(currentPlayerData, options);
+                File.WriteAllText(JsonFallbackPath, json);
+            }
+            catch
+            {
             }
         }
     }

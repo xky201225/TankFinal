@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -17,14 +17,15 @@ namespace Peace_of_Tanks
     {
         BinaryFormatter formatter = new BinaryFormatter();
 
-        public static event TankEvent MovePlayer1, MovePlayer2;  // делегат движение игроков
-        public static event AnimateEvent DelayEvent;             // делегат задержка анимации (отрисовка с паузами между рисунками)
-        public static event EnemyEvent MoveEnemy;                // делегат движение врагов
+        public static event TankEvent MovePlayer1, MovePlayer2;  // 写械谢械谐邪褌 写胁懈卸械薪懈械 懈谐褉芯泻芯胁
+        public static event AnimateEvent DelayEvent;             // 写械谢械谐邪褌 蟹邪写械褉卸泻邪 邪薪懈屑邪褑懈懈 (芯褌褉懈褋芯胁泻邪 褋 锌邪褍蟹邪屑懈 屑械卸写褍 褉懈褋褍薪泻邪屑懈)
+        public static event EnemyEvent MoveEnemy;                // 写械谢械谐邪褌 写胁懈卸械薪懈械 胁褉邪谐芯胁
 
-        int menu = 0;  // выбранный пункт меню
-        int modeMenu = 0; // текущее меню
-        bool secondPlayer = false, firstPlayer = true; // отображение первого и второго игрока
-        int gameoverX = 355, gameoverY = 10, pauseGameOver = 100; // координаты плашка GameOver
+        int menu = 0;  // 胁褘斜褉邪薪薪褘泄 锌褍薪泻褌 屑械薪褞
+        int modeMenu = 0; // 褌械泻褍褖械械 屑械薪褞
+        bool secondPlayer = false, firstPlayer = true; // 芯褌芯斜褉邪卸械薪懈械 锌械褉胁芯谐芯 懈 胁褌芯褉芯谐芯 懈谐褉芯泻邪
+        private const int GameOverSettlementDelayLegacyTicks = 12;
+        int gameoverX = 355, gameoverY = 10, pauseGameOver = GameTiming.ScaleLegacyTicks(GameOverSettlementDelayLegacyTicks); // 泻芯芯褉写懈薪邪褌褘 锌谢邪褕泻邪 GameOver
 
         Statistics stats = new Statistics();
 
@@ -66,7 +67,7 @@ namespace Peace_of_Tanks
 
         int timeSpawn;
 
-        //движение и меню (клавиши)
+        //写胁懈卸械薪懈械 懈 屑械薪褞 (泻谢邪胁懈褕懈)
 
         private void MainWindow_KeyDown(object sender, KeyEventArgs e)
         {
@@ -82,7 +83,7 @@ namespace Peace_of_Tanks
                     PicTank.Location = new Point(270, PicTank.Location.Y - 40);
                     menu--;
                 }
-                if (e.KeyCode == Keys.Down && menu != 5)  // 现在有6个选项（0-5）
+                if (e.KeyCode == Keys.Down && menu != 5)  // 当前共有 6 个选项（0-5）
                 {
                     PicTank.Location = new Point(270, PicTank.Location.Y + 40);
                     menu++;
@@ -185,7 +186,7 @@ namespace Peace_of_Tanks
             }
             else
             {
-                // 游戏中按ESC键返回主菜单
+                // 游戏中按 ESC 键返回主菜单
                 if (e.KeyCode == Keys.Escape)
                 {
                     modeMenu = 0;
@@ -325,12 +326,12 @@ namespace Peace_of_Tanks
         private void fontsProjects()
         {
             font = new PrivateFontCollection();
-            font.AddFontFile("font/FontBit.ttf");
+            font.AddFontFile(AppPaths.GetContentPath("font", "FontBit.ttf"));
         }
 
         private void fonts()
         {
-            //Задаем шрифт текста, отображаемого элементом управления.
+            //袟邪写邪械屑 褕褉懈褎褌 褌械泻褋褌邪, 芯褌芯斜褉邪卸邪械屑芯谐芯 褝谢械屑械薪褌芯屑 褍锌褉邪胁谢械薪懈褟.
             EnterName1.Font = new Font(font.Families[0], 16);
             EnterName2.Font = new Font(font.Families[0], 16);
             buttonName1.Font = new Font(font.Families[0], 16);
@@ -408,14 +409,14 @@ namespace Peace_of_Tanks
             PicLevel.Image = CreateTextBitmap("第一关", PicLevel.Width, PicLevel.Height, 16);
         }
 
-        //меню вверхнее
+        //屑械薪褞 胁胁械褉褏薪械械
 
         private void MainWindow_Load(object sender, EventArgs e)
         {
             heart = new Bitmap(Peace_of_Tanks.Properties.Resources.heart);
             gameover = CreateTextBitmap("游戏结束", 100, 50, 20);
 
-            // 使用新的背景图（菜单页面用jiazai.png，游戏中用war.png）
+            // 使用新的背景图（菜单页面使用 xiazai.png，游戏中使用 war.png）
             if (ResourceManager.MenuBackground != null && ResourceManager.MenuBackground.Width > 1)
                 BackgroundImage = new Bitmap(ResourceManager.MenuBackground);
             else
@@ -424,24 +425,23 @@ namespace Peace_of_Tanks
             Text = "和平坦克大战";
 
             RichAbout.Text = "        项目说明        \n\n" +
-                             "本项目基于原坦克项目核心玩法\n\n" +
-                             "核心代码迁移到当前课程工程，\n\n" +
-                             "并完成了中文界面与联机功能整合。\n\n" +
-                             "适合作为 C# 网络应用编程课程\n\n" +
+                             "本项目基于原坦克项目的核心玩法，\n\n" +
+                             "将主要代码迁移到当前课程工程，\n\n" +
+                             "并整合了中文界面、联机对战和经验系统。\n\n" +
+                             "适合作为 C# 网络应用编程课程的\n\n" +
                              "期末展示项目。";
 
             RichRules.Text = "游戏目标\n\n" +
                              "击毁敌方坦克并尽量获得更高分数。\n\n" +
-                             "当我方生命耗尽，或地图中的敌人被全部消灭后，\n\n" +
+                             "当我方生命耗尽，或地图中的敌人全部被消灭后，\n\n" +
                              "本局游戏结束。\n\n" +
-                             "单机一号玩家操作：方向键移动，\n\n" +
-                             "鼠标左键发射炮弹。\n\n" +
-                             "本地双人模式中，二号玩家使用 W/A/S/D 移动，\n\n" +
+                             "单人模式：方向键移动，鼠标左键发射炮弹。\n\n" +
+                             "本地双人模式：二号玩家使用 W/A/S/D 移动，\n\n" +
                              "空格键发射炮弹。\n\n" +
-                             "联机模式：在主菜单按 N，输入同一服务器地址，\n\n" +
-                             "两名玩家即可自动匹配开始游戏。";
+                             "联机模式：在大厅中创建或加入同一服务器房间，\n\n" +
+                             "两名玩家即可开始游戏。";
 
-            //меню 0
+            //屑械薪褞 0
             ConfigureChineseLayout();
             ApplyChineseUiImages();
             picturePlayer2_.SizeMode = PictureBoxSizeMode.StretchImage;
@@ -451,11 +451,11 @@ namespace Peace_of_Tanks
             PicButtonStat.SizeMode = PictureBoxSizeMode.StretchImage;
             PicTank.Image = Peace_of_Tanks.Properties.Resources.PicTank;
             PicTank.SizeMode = PictureBoxSizeMode.StretchImage;
-            //меню 1
+            //屑械薪褞 1
             PicButtonEasy.SizeMode = PictureBoxSizeMode.StretchImage;
             PicButtonHard.SizeMode = PictureBoxSizeMode.StretchImage;
             PicButtonReal.SizeMode = PictureBoxSizeMode.StretchImage;
-            //меню 2
+            //屑械薪褞 2
             PicLevel.SizeMode = PictureBoxSizeMode.StretchImage;
             StartFromLaunchOptions();
         }
@@ -492,12 +492,12 @@ namespace Peace_of_Tanks
                 RefreshBattleBackground();
 
                 isReadyTo1Level();
-                timer1.Interval = 25;
+                timer1.Interval = GameTiming.TimerIntervalMs;
                 timer1.Enabled = true;
             }
             else if (modeMenu == 4)
             {
-                // 切回菜单背景
+                // 鍒囧洖鑿滃崟鑳屾櫙
                 if (ResourceManager.MenuBackground != null && ResourceManager.MenuBackground.Width > 1)
                     BackgroundImage = new Bitmap(ResourceManager.MenuBackground);
                 else
@@ -662,6 +662,129 @@ namespace Peace_of_Tanks
             else if (shooter == 2)
             {
                 player2Damage += Math.Max(0, damage);
+            }
+        }
+
+        private bool HandleBulletCollision(int bulletIndex)
+        {
+            Bullet bullet = bullets[bulletIndex];
+
+            if (Collisions.check_touch(this, bullet))
+            {
+                AddHitEffect(bullet.x, bullet.y);
+                bullets.RemoveAt(bulletIndex);
+                return true;
+            }
+
+            for (int j = 0; j < boxes.Count; j++)
+            {
+                if (Collisions.check_touch(this, bullet, boxes[j]) == 2)
+                {
+                    boxes[j].hitPoint--;
+                    AddHitEffect(boxes[j].x, boxes[j].y);
+                    if (boxes[j].hitPoint == 0)
+                    {
+                        if (boxes[j] is Box_Base)
+                        {
+                            baseDestroyed = true;
+                        }
+
+                        boxes.RemoveAt(j);
+                    }
+
+                    bullets.RemoveAt(bulletIndex);
+                    return true;
+                }
+            }
+
+            for (int j = 0; j < enemies.Count; j++)
+            {
+                if (Collisions.check_touch(bullet, enemies[j]))
+                {
+                    if (bullet.who == 1)
+                    {
+                        setting.pointsPlayer1 += setting.pointsForEnemy;
+                    }
+                    else if (bullet.who == 2)
+                    {
+                        setting.pointsPlayer2 += setting.pointsForEnemy;
+                    }
+
+                    if (bullet.who != 0)
+                    {
+                        AddHitEffect(enemies[j].x, enemies[j].y);
+                        TrackDamage(bullet.who, bullet.damage);
+                        enemies[j].hitpoints -= bullet.damage;
+                        if (enemies[j].hitpoints <= 0)
+                        {
+                            setting.countEnemies--;
+                            if (bullet.who == 1)
+                            {
+                                player1Kills++;
+                            }
+                            else if (bullet.who == 2)
+                            {
+                                player2Kills++;
+                            }
+                        }
+
+                        bullets.RemoveAt(bulletIndex);
+                        return true;
+                    }
+                }
+            }
+
+            if (firstPlayer && bullet.who != 1 && Collisions.check_touch(bullet, player1))
+            {
+                if (bullet.who == 2)
+                {
+                    setting.pointsPlayer2 += setting.pointsForPlayers;
+                }
+
+                AddHitEffect(player1.x, player1.y);
+                TrackDamage(bullet.who, bullet.damage);
+                player1.hitpoints -= bullet.damage;
+                if (player1.hitpoints <= 0 && bullet.who == 2)
+                {
+                    player2Kills++;
+                }
+
+                bullets.RemoveAt(bulletIndex);
+                return true;
+            }
+
+            if (secondPlayer && bullet.who != 2 && Collisions.check_touch(bullet, player2))
+            {
+                if (bullet.who == 1)
+                {
+                    setting.pointsPlayer1 += setting.pointsForPlayers;
+                }
+
+                AddHitEffect(player2.x, player2.y);
+                TrackDamage(bullet.who, bullet.damage);
+                player2.hitpoints -= bullet.damage;
+                if (player2.hitpoints <= 0 && bullet.who == 1)
+                {
+                    player1Kills++;
+                }
+
+                bullets.RemoveAt(bulletIndex);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void DrawKillHud(int player1KillCount, int player2KillCount)
+        {
+            using (Font font = new Font("Microsoft YaHei UI", 11, FontStyle.Bold))
+            using (SolidBrush selfBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
+            using (SolidBrush otherBrush = new SolidBrush(Color.FromArgb(210, 230, 245)))
+            {
+                string selfText = IsNetworkGuest ? "己方击杀 " + player2KillCount : "己方击杀 " + player1KillCount;
+                string otherText = IsNetworkGuest ? "对手击杀 " + player1KillCount : "对手击杀 " + player2KillCount;
+                grMemory.DrawString(selfText, font, selfBrush, 310, 12);
+                grMemory.DrawString(otherText, font, otherBrush, 470, 12);
             }
         }
 
@@ -975,11 +1098,11 @@ namespace Peace_of_Tanks
             stats.Add_new_record(setting.stats2);
         }
 
-        //закрытие формы (сохранение)
+        //蟹邪泻褉褘褌懈械 褎芯褉屑褘 (褋芯褏褉邪薪械薪懈械)
         private void MainWindow_FormClosed(object sender, FormClosedEventArgs e)
         {
             CloseNetworkConnection();
-            using (FileStream fs = new FileStream("stats.dat", FileMode.OpenOrCreate))
+            using (FileStream fs = new FileStream(AppPaths.GetDataPath("stats.dat"), FileMode.OpenOrCreate))
             {
                 formatter.Serialize(fs, stats);
             }
@@ -1108,7 +1231,7 @@ namespace Peace_of_Tanks
         {
             if (setting.level == 1)
             {
-                gameoverX = 355; gameoverY = 10; pauseGameOver = 100;
+                gameoverX = 355; gameoverY = 10; pauseGameOver = GameTiming.ScaleLegacyTicks(GameOverSettlementDelayLegacyTicks);
 
                 firstPlayer = true;
                 tanks.Add(player1);
@@ -1129,7 +1252,7 @@ namespace Peace_of_Tanks
 
                 timeSpawn = setting.timeSpawn;
 
-                // 生成随机颜色的敌方坦克
+                // 鐢熸垚闅忔満棰滆壊鐨勬晫鏂瑰潶鍏?
                 TankType enemyType1 = TankResourceLoader.GetRandomEnemyTankType();
                 var (img1_1, img1_2) = TankResourceLoader.GetEnemyTankImages(enemyType1);
                 var config1 = TankConfigs.GetConfig(enemyType1);
@@ -1186,7 +1309,7 @@ namespace Peace_of_Tanks
                 RelocateOverlappingTanks();
             }
         }
-        //таймер (все логика)
+        //褌邪泄屑械褉 (胁褋械 谢芯谐懈泻邪)
 
         private void timer1_Tick(object sender, EventArgs e)
         {
@@ -1201,7 +1324,7 @@ namespace Peace_of_Tanks
                 ApplyRemoteInputToSecondPlayer();
             }
 
-            ///////////////////////////////////////////////отрисовка нижней панель
+            ///////////////////////////////////////////////芯褌褉懈褋芯胁泻邪 薪懈卸薪械泄 锌邪薪械谢褜
 
             int x = 150, y = 760;
             for (int i = 0; i < setting.lifesPlayer1; i++)
@@ -1268,7 +1391,12 @@ namespace Peace_of_Tanks
                 }
             }
 
-            /////////////////////////////////////////////////////спавн ботов
+            /////////////////////////////////////////////////////褋锌邪胁薪 斜芯褌芯胁
+            if (setting.twoPlayer || networkMode)
+            {
+                DrawKillHud(player1Kills, player2Kills);
+            }
+
             if (timeSpawn == 0 && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
             {
                 Random random = new Random();
@@ -1292,7 +1420,7 @@ namespace Peace_of_Tanks
                         num = random.Next(0, 4);
                     }
 
-                    // 生成随机颜色的敌方坦克
+                    // 鐢熸垚闅忔満棰滆壊鐨勬晫鏂瑰潶鍏?
                     TankType enemyType = TankResourceLoader.GetRandomEnemyTankType();
                     var (imgEnemy1, imgEnemy2) = TankResourceLoader.GetEnemyTankImages(enemyType);
                     var configEnemy = TankConfigs.GetConfig(enemyType);
@@ -1310,10 +1438,10 @@ namespace Peace_of_Tanks
             else
                 timeSpawn--;
 
-            //////////////////////////////////////////////проверка столкновений
-            for (int i = 0; i < bullets.Count; i++) //проверка столкновения пуль и ящиков
+            //////////////////////////////////////////////锌褉芯胁械褉泻邪 褋褌芯谢泻薪芯胁械薪懈泄
+            for (int i = 0; i < bullets.Count; i++) //锌褉芯胁械褉泻邪 褋褌芯谢泻薪芯胁械薪懈褟 锌褍谢褜 懈 褟褖懈泻芯胁
             {
-                bool bulletDeath = false;
+                bool bulletDeath = HandleBulletCollision(i);
                 for (int j = 0; j < boxes.Count; j++)
                 {
                     if (!bulletDeath && Collisions.check_touch(this, bullets[i], boxes[j]) == 2)
@@ -1345,7 +1473,7 @@ namespace Peace_of_Tanks
                     }
                 }
 
-                //столкновение пуль с ботами
+                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋 斜芯褌邪屑懈
                 for(int j = 0; j < enemies.Count; j++)
                 {
                     if(!bulletDeath && Collisions.check_touch(bullets[i], enemies[j]) )
@@ -1359,7 +1487,7 @@ namespace Peace_of_Tanks
                         {
                             AddHitEffect(enemies[j].x, enemies[j].y);
                             TrackDamage(bullets[i].who, bullets[i].damage);
-                            enemies[j].hitpoints -= bullets[i].damage;  // 使用子弹伤害
+                            enemies[j].hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
                             if (enemies[j].hitpoints <= 0)
                             {
                                 setting.countEnemies--;
@@ -1380,7 +1508,7 @@ namespace Peace_of_Tanks
                     }
                 }
 
-                //столкновение пуль с 1 игроком
+                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋 1 懈谐褉芯泻芯屑
                 if (!bulletDeath && firstPlayer && bullets[i].who != 1 && Collisions.check_touch(bullets[i], player1))
                 {
                     if(bullets[i].who == 2)
@@ -1390,7 +1518,7 @@ namespace Peace_of_Tanks
 
                     AddHitEffect(player1.x, player1.y);
                     TrackDamage(bullets[i].who, bullets[i].damage);
-                    player1.hitpoints -= bullets[i].damage;  // 使用子弹伤害
+                    player1.hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
                     if (player1.hitpoints <= 0 && bullets[i].who == 2)
                     {
                         player2Kills++;
@@ -1399,7 +1527,7 @@ namespace Peace_of_Tanks
                     bulletDeath = true;
                 }
 
-                //столкновение пуль со 2 игроком
+                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋芯 2 懈谐褉芯泻芯屑
                 if (!bulletDeath && secondPlayer && bullets[i].who != 2 && Collisions.check_touch(bullets[i], player2))
                 {
                     if (bullets[i].who == 1)
@@ -1409,7 +1537,7 @@ namespace Peace_of_Tanks
 
                     AddHitEffect(player2.x, player2.y);
                     TrackDamage(bullets[i].who, bullets[i].damage);
-                    player2.hitpoints -= bullets[i].damage;  // 使用子弹伤害
+                    player2.hitpoints -= bullets[i].damage;  // 浣跨敤瀛愬脊浼ゅ
                     if (player2.hitpoints <= 0 && bullets[i].who == 1)
                     {
                         player1Kills++;
@@ -1418,55 +1546,67 @@ namespace Peace_of_Tanks
                     bulletDeath = true;
                 }
 
-                //движение пули
+                //写胁懈卸械薪懈械 锌褍谢懈
                 if (!bulletDeath)
-                    bullets[i].Move();
-                else
+                {
+                    int stepCount = bullets[i].MoveStepCount;
+                    for (int step = 0; step < stepCount; step++)
+                    {
+                        bullets[i].MoveStep(step);
+                        if (HandleBulletCollision(i))
+                        {
+                            bulletDeath = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (bulletDeath)
                 {
                     i--;
                 }
             }
 
-            //задержка отрисовки анимации  (делегат)
+            //蟹邪写械褉卸泻邪 芯褌褉懈褋芯胁泻懈 邪薪懈屑邪褑懈懈  (写械谢械谐邪褌)
             if(DelayEvent != null)
                 DelayEvent(); 
 
-            //движение ботов
+            //写胁懈卸械薪懈械 斜芯褌芯胁
             if (MoveEnemy != null)
             {
                 for (int i = 0; i < setting.speedEnemy; i++)
                     MoveEnemy(this, boxes, bullets, tanks);
             };
 
-            /////////////////////////////////////// отрисовка
+            /////////////////////////////////////// 芯褌褉懈褋芯胁泻邪
 
-            for (int i = 0; i < boxes.Count; i++) //отрисовка ящиков
+            for (int i = 0; i < boxes.Count; i++) //芯褌褉懈褋芯胁泻邪 褟褖懈泻芯胁
             {
                 if (!(boxes[i] is Box_Green))
                     boxes[i].Draw(grMemory);
             }
-            for (int i = 0; i < bullets.Count; i++) //отрисовка пуль
+            for (int i = 0; i < bullets.Count; i++) //芯褌褉懈褋芯胁泻邪 锌褍谢褜
             {
                 bullets[i].Draw(grMemory);
             }
-            for (int i = 0; i < enemies.Count; i++) //отрисовка ботов
+            for (int i = 0; i < enemies.Count; i++) //芯褌褉懈褋芯胁泻邪 斜芯褌芯胁
             {
                 enemies[i].Draw(grMemory);
             }
 
-            if (firstPlayer) player1.Draw(grMemory);                    // отрисовка танков игроков
-            if (secondPlayer) player2.Draw(grMemory);                   
+            if (firstPlayer) player1.Draw(grMemory, Color.FromArgb(80, 235, 120));                    // 芯褌褉懈褋芯胁泻邪 褌邪薪泻芯胁 懈谐褉芯泻芯胁
+            if (secondPlayer) player2.Draw(grMemory, networkMode ? Color.FromArgb(255, 82, 82) : Color.Empty);
 
-            for (int i = 0; i < boxes.Count; i++) // отрисовка лесных ящиков, позже отрисовки танков, чтобы танк мог прятаться в лесу
+            for (int i = 0; i < boxes.Count; i++) // 芯褌褉懈褋芯胁泻邪 谢械褋薪褘褏 褟褖懈泻芯胁, 锌芯蟹卸械 芯褌褉懈褋芯胁泻懈 褌邪薪泻芯胁, 褔褌芯斜褘 褌邪薪泻 屑芯谐 锌褉褟褌邪褌褜褋褟 胁 谢械褋褍
             {
                 if (boxes[i] is Box_Green)
                     boxes[i].Draw(grMemory);
             }
 
-            for(int i = 0; i < animations.Count; i++) // отрисовка анимации
+            for(int i = 0; i < animations.Count; i++) // 芯褌褉懈褋芯胁泻邪 邪薪懈屑邪褑懈懈
                 animations[i].Draw(grMemory);
 
-            ////////////////////////////////////////////////////////////////////////проверка конца игры
+            ////////////////////////////////////////////////////////////////////////锌褉芯胁械褉泻邪 泻芯薪褑邪 懈谐褉褘
 
             bool freeBattleFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.FreeBattle && (player1Kills >= 15 || player2Kills >= 15);
             bool baseDefenseFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.BaseDefense && baseDestroyed;
@@ -1476,22 +1616,15 @@ namespace Peace_of_Tanks
                 || freeBattleFinished || baseDefenseFinished
                 || singlePlayerCleared)
             {
-                if (singlePlayerCleared)
+                if (!singlePlayerCleared)
                 {
-                    pauseGameOver -= 1;
-                }
-                else
-                if (gameoverY <= 350)
-                {
-                    grMemory.DrawImage(gameover, gameoverX, gameoverY += 8);
-                }
-                else
-                {
+                    gameoverY = Math.Min(140, gameoverY + 24);
                     grMemory.DrawImage(gameover, gameoverX, gameoverY);
-                    pauseGameOver -= 1;
                 }
 
-                if (pauseGameOver == 0)   /////////////// 保存统计信息和奖励经验
+                pauseGameOver -= 1;
+
+                if (pauseGameOver <= 0)   // 保存统计信息和奖励经验
                 {
                     stats bufStat = new stats();
                     bufStat.difficulty = setting.difficulty;
@@ -1549,24 +1682,24 @@ namespace Peace_of_Tanks
             grMain.DrawImage(backgroundMemory, 0, 0);
             grMemory.DrawImage(backgroundMain, 0, 0);
 
-            ////////////////////////////////////////////////////////////// логика
+            ////////////////////////////////////////////////////////////// 谢芯谐懈泻邪
 
             ProcessPlayerFireInputs();
 
-            if (player1.message.pauseSpace > 0) player1.message.pauseSpace--;                    // пауза между выстрелами у игроков
+            if (player1.message.pauseSpace > 0) player1.message.pauseSpace--;                    // 锌邪褍蟹邪 屑械卸写褍 胁褘褋褌褉械谢邪屑懈 褍 懈谐褉芯泻芯胁
             if (secondPlayer && player2.message.pauseSpace > 0) player2.message.pauseSpace--;     //
 
-            for (int i = 0; i < enemies.Count; i++) //пауза между выстрелами у ботов
+            for (int i = 0; i < enemies.Count; i++) //锌邪褍蟹邪 屑械卸写褍 胁褘褋褌褉械谢邪屑懈 褍 斜芯褌芯胁
                 enemies[i].message.pauseSpace--;
 
-            for (int i = 0; i < 8; i++)                                                         // движение танков(внутри проверка на соприкосновения танков)
+            for (int i = 0; i < 8; i++)                                                         // 写胁懈卸械薪懈械 褌邪薪泻芯胁(胁薪褍褌褉懈 锌褉芯胁械褉泻邪 薪邪 褋芯锌褉懈泻芯褋薪芯胁械薪懈褟 褌邪薪泻芯胁)
             {
                 if (firstPlayer) MovePlayer1(this, null, player1.message, boxes, tanks);
                 if (secondPlayer) MovePlayer2(this, null, player2.message, boxes, tanks);
             }
 
             {
-                if (firstPlayer)                                               //сообщение кто есть в игре (тольк 1 или 2 игрок, оба, или никого)
+                if (firstPlayer)                                               //褋芯芯斜褖械薪懈械 泻褌芯 械褋褌褜 胁 懈谐褉械 (褌芯谢褜泻 1 懈谢懈 2 懈谐褉芯泻, 芯斜邪, 懈谢懈 薪懈泻芯谐芯)
                 {
                     EnemyEventArgs.player1X = player1.x;
                     EnemyEventArgs.player1Y = player1.y;
@@ -1590,7 +1723,7 @@ namespace Peace_of_Tanks
                     EnemyEventArgs.players = 0;
             }
 
-            for (int i = 0; i < enemies.Count; i++)                           //уничтожение врагов при хп = 0
+            for (int i = 0; i < enemies.Count; i++)                           //褍薪懈褔褌芯卸械薪懈械 胁褉邪谐芯胁 锌褉懈 褏锌 = 0
             {
                 if(enemies[i].hitpoints <= 0)
                 {
@@ -1603,7 +1736,7 @@ namespace Peace_of_Tanks
                 }
             }
 
-            if (secondPlayer && player2.hitpoints <= 0)  // уничтожение второго игрока
+            if (secondPlayer && player2.hitpoints <= 0)  // 褍薪懈褔褌芯卸械薪懈械 胁褌芯褉芯谐芯 懈谐褉芯泻邪
             {
                 setting.lifesPlayer2--;
                 player2Deaths++;
@@ -1625,7 +1758,7 @@ namespace Peace_of_Tanks
                 }
                     
             }
-            if (firstPlayer && player1.hitpoints <= 0) // уничтожение первого игрока
+            if (firstPlayer && player1.hitpoints <= 0) // 褍薪懈褔褌芯卸械薪懈械 锌械褉胁芯谐芯 懈谐褉芯泻邪
             {
                 setting.lifesPlayer1--;
                 player1Deaths++;
@@ -1647,7 +1780,7 @@ namespace Peace_of_Tanks
                 }
             }
 
-            for(int i = 0; i < animations.Count; i++)   // уничтожение анимации, если она завершилась (отписка, делегат)
+            for(int i = 0; i < animations.Count; i++)   // 褍薪懈褔褌芯卸械薪懈械 邪薪懈屑邪褑懈懈, 械褋谢懈 芯薪邪 蟹邪胁械褉褕懈谢邪褋褜 (芯褌锌懈褋泻邪, 写械谢械谐邪褌)
             {
                 if (animations[i].message.delay <= 0)
                 {
@@ -1662,7 +1795,7 @@ namespace Peace_of_Tanks
             }
         }
 
-        //начальная инициализация
+        //薪邪褔邪谢褜薪邪褟 懈薪懈褑懈邪谢懈蟹邪褑懈褟
         public MainWindow() : this(GameMode.SinglePlayer, TankType.Green)
         {
         }
@@ -1696,7 +1829,7 @@ namespace Peace_of_Tanks
             Animation.megaBoom1 = Peace_of_Tanks.Properties.Resources.megaBoom1;
             Animation.megaBoom2 = Peace_of_Tanks.Properties.Resources.megaBoom2;
 
-            // 使用选中的坦克类型创建玩家坦克
+            // 浣跨敤閫変腑鐨勫潶鍏嬬被鍨嬪垱寤虹帺瀹跺潶鍏?
             var playerData = DataManager.CurrentPlayer;
             var playerTankData = playerData.Tanks[selectedTankType];
             var config = TankConfigs.GetConfig(selectedTankType);
@@ -1710,15 +1843,16 @@ namespace Peace_of_Tanks
             player1 = new PlayerTank(tankImg1, tankImg2, Peace_of_Tanks.Properties.Resources.bullet1, -100, -100, 2, health, attack);
             player2 = new PlayerTank(Peace_of_Tanks.Properties.Resources.player2_1, Peace_of_Tanks.Properties.Resources.player2_2, Peace_of_Tanks.Properties.Resources.bullet1, -50, -50, 2);
 
-            if(File.Exists("stats.dat"))
+            string statsPath = AppPaths.GetDataPath("stats.dat");
+            if(File.Exists(statsPath))
             {
-                using (FileStream fs = new FileStream("stats.dat", FileMode.OpenOrCreate))
+                using (FileStream fs = new FileStream(statsPath, FileMode.OpenOrCreate))
                 {
                     stats = (Statistics)formatter.Deserialize(fs);
                 }
             }
 
-            timer1.Interval = 25;
+            timer1.Interval = GameTiming.TimerIntervalMs;
 
             fontsProjects();
             fonts();
@@ -1751,7 +1885,7 @@ namespace Peace_of_Tanks
             modeMenu = 3;
             RefreshBattleBackground();
             isReadyTo1Level();
-            timer1.Interval = 25;
+            timer1.Interval = GameTiming.TimerIntervalMs;
             timer1.Enabled = true;
         }
     }

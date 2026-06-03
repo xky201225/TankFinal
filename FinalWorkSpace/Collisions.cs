@@ -9,13 +9,22 @@ namespace Peace_of_Tanks
 {
     class Collisions
     {
+        public static bool check_touch(Form mainWindow, Bullet bullet)
+        {
+            int s_bullet = 10;
+            return (bullet.x <= mainWindow.ClientRectangle.Left)
+                || (bullet.y <= mainWindow.ClientRectangle.Top)
+                || (bullet.x + s_bullet >= mainWindow.ClientRectangle.Right)
+                || (bullet.y + s_bullet >= mainWindow.ClientRectangle.Bottom);
+        }
+
         public static int check_touch(Form mainWindow, Bullet bullet, Box box)
         {
             int s_bullet = 10, s_box = 25;
-            if ((bullet.x <= mainWindow.ClientRectangle.Left) || (bullet.y <= mainWindow.ClientRectangle.Top)
-                || (bullet.x + 10 >= mainWindow.ClientRectangle.Right) || (bullet.y + 10 >= mainWindow.ClientRectangle.Bottom)
-                )
+            if (check_touch(mainWindow, bullet))
+            {
                 return 1;//касание  границ
+            }
             else
                 if (((bullet.x < box.x && bullet.x + s_bullet > box.x) || (bullet.x >= box.x && box.x + s_box > bullet.x))
                 && ((bullet.y < box.y && bullet.y + s_bullet > box.y) || (bullet.y >= box.y && box.y + s_box > bullet.y))

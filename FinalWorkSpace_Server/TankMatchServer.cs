@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
+using Microsoft.EntityFrameworkCore;
+using Peace_of_Tanks_Server.Models;
 
 namespace Peace_of_Tanks_Server
 {
@@ -13,6 +17,7 @@ namespace Peace_of_Tanks_Server
         private readonly TcpListener listener;
         private readonly object syncRoot = new object();
         private readonly Dictionary<string, ClientSession> waitingRooms = new Dictionary<string, ClientSession>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> authTokens = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<ClientSession> lobbySessions = new List<ClientSession>();
         private Thread acceptThread;
         private bool isRunning;
@@ -73,13 +78,39 @@ namespace Peace_of_Tanks_Server
 
         internal void ProcessLine(ClientSession session, string line)
         {
+            if (line.StartsWith("REGISTER|", StringComparison.Ordinal))
+            {
+                HandleRegister(session, line);
+                session.Dispose();
+                return;
+            }
+
+            if (line.StartsWith("LOGIN|", StringComparison.Ordinal))
+            {
+                HandleLogin(session, line);
+                session.Dispose();
+                return;
+            }
+
+            if (line.StartsWith("SYNC|", StringComparison.Ordinal))
+            {
+                HandleSync(session, line);
+                session.Dispose();
+                return;
+            }
+
             if (line.StartsWith("JOIN|", StringComparison.Ordinal))
             {
                 string[] parts = line.Split('|');
                 string playerName = parts.Length > 1 ? parts[1] : string.Empty;
                 string joinMode = parts.Length > 2 ? parts[2] : "Search";
                 string roomId = parts.Length > 3 ? parts[3] : string.Empty;
-                PairSession(session, playerName, joinMode, roomId);
+                int tankType = 0;
+                if (parts.Length > 4)
+                {
+                    int.TryParse(parts[4], out tankType);
+                }
+                PairSession(session, playerName, joinMode, roomId, tankType);
                 return;
             }
 
@@ -119,6 +150,154 @@ namespace Peace_of_Tanks_Server
             }
         }
 
+        private void HandleRegister(ClientSession session, string line)
+        {
+            string[] parts = line.Split('|');
+            string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
+            string password = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
+            if (userName.Length == 0 || userName.Length > 50)
+            {
+                session.Send("REGISTER_ERROR|用户名长度必须为 1 到 50 个字符。");
+                return;
+            }
+
+            if (password.Length < 6 || password.Length > 50)
+            {
+                session.Send("REGISTER_ERROR|密码长度必须为 6 到 50 个字符。");
+                return;
+            }
+
+            try
+            {
+                using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
+                {
+                    if (db.Users.Any(u => u.UserName == userName))
+                    {
+                        session.Send("REGISTER_EXISTS");
+                        return;
+                    }
+
+                    DateTime now = DateTime.UtcNow;
+                    User user = new User
+                    {
+                        UserName = userName,
+                        PasswordHash = HashPassword(password),
+                        TotalExp = 0,
+                        SelectedTank = 0,
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        LastLoginAt = now
+                    };
+
+                    db.Users.Add(user);
+                    db.SaveChanges();
+
+                    for (int tankType = 0; tankType <= 4; tankType++)
+                    {
+                        db.UserTanks.Add(new UserTank
+                        {
+                            UserId = user.Id,
+                            TankType = tankType,
+                            Level = 1,
+                            CurrentExp = 0,
+                            IsUnlocked = tankType == 0
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                session.Send("REGISTER_OK");
+                Console.WriteLine("用户注册成功：" + userName);
+            }
+            catch (DbUpdateException)
+            {
+                session.Send("REGISTER_EXISTS");
+            }
+            catch (Exception ex)
+            {
+                session.Send("REGISTER_ERROR|" + ex.Message);
+            }
+        }
+
+        private void HandleLogin(ClientSession session, string line)
+        {
+            string[] parts = line.Split('|');
+            string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
+            string password = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
+
+            try
+            {
+                using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
+                {
+                    User user = db.Users.FirstOrDefault(u => u.UserName == userName);
+                    if (user == null || !VerifyPassword(password, user.PasswordHash))
+                    {
+                        session.Send("LOGIN_INVALID");
+                        return;
+                    }
+
+                    user.LastLoginAt = DateTime.UtcNow;
+                    db.SaveChanges();
+
+                    string token = CreateAuthToken();
+                    lock (syncRoot)
+                    {
+                        authTokens[user.UserName] = token;
+                    }
+
+                    session.Send("LOGIN_OK|" + EncodePayload(MapUserToPayload(db, user)) + "|" + EncodeProtocolPart(token));
+                }
+            }
+            catch (Exception ex)
+            {
+                session.Send("LOGIN_ERROR|" + ex.Message);
+            }
+        }
+
+        private void HandleSync(ClientSession session, string line)
+        {
+            string[] parts = line.Split('|');
+            string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
+            string token = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
+            UserSyncPayload payload = parts.Length > 3 ? DecodePayload(parts[3]) : null;
+            if (payload == null || string.IsNullOrWhiteSpace(userName))
+            {
+                session.Send("SYNC_ERROR|同步数据无效。");
+                return;
+            }
+
+            lock (syncRoot)
+            {
+                string expectedToken;
+                if (!authTokens.TryGetValue(userName, out expectedToken) || expectedToken != token)
+                {
+                    session.Send("SYNC_ERROR|登录状态已失效，请重新登录。");
+                    return;
+                }
+            }
+
+            try
+            {
+                using (LocalDBMSSQLLocalDBContext db = new LocalDBMSSQLLocalDBContext())
+                {
+                    User user = db.Users.FirstOrDefault(u => u.UserName == userName);
+                    if (user == null)
+                    {
+                        session.Send("SYNC_ERROR|用户不存在，请重新登录。");
+                        return;
+                    }
+
+                    ApplyPayloadToUser(db, user, payload);
+                    session.Send("SYNC_OK|" + EncodePayload(MapUserToPayload(db, user)));
+                }
+            }
+            catch (Exception ex)
+            {
+                session.Send("SYNC_ERROR|" + ex.Message);
+            }
+        }
+
         private void RegisterLobbySession(ClientSession session, string playerName)
         {
             lock (syncRoot)
@@ -144,12 +323,13 @@ namespace Peace_of_Tanks_Server
             }
         }
 
-        private void PairSession(ClientSession session, string playerName, string joinMode, string roomId)
+        private void PairSession(ClientSession session, string playerName, string joinMode, string roomId, int tankType)
         {
             lock (syncRoot)
             {
                 session.PlayerName = string.IsNullOrWhiteSpace(playerName) ? "玩家" : playerName.Trim();
                 session.RoomId = NormalizeRoomId(roomId);
+                session.TankType = Math.Max(0, Math.Min(4, tankType));
 
                 if (string.Equals(joinMode, "Create", StringComparison.OrdinalIgnoreCase))
                 {
@@ -222,8 +402,9 @@ namespace Peace_of_Tanks_Server
             host.Peer = guest;
             guest.Peer = host;
 
-            host.Send("START|HOST|" + host.RoomId);
-            guest.Send("START|GUEST|" + host.RoomId);
+            string tankPayload = "|" + host.TankType + "|" + guest.TankType;
+            host.Send("START|HOST|" + host.RoomId + tankPayload);
+            guest.Send("START|GUEST|" + host.RoomId + tankPayload);
             Console.WriteLine("完成配对：" + host.PlayerName + " <-> " + guest.PlayerName + " 房间：" + host.RoomId);
         }
 
@@ -231,6 +412,148 @@ namespace Peace_of_Tanks_Server
         {
             string normalized = (value ?? string.Empty).Trim();
             return normalized.Replace(" ", string.Empty).Replace("|", "_");
+        }
+
+        private static string DecodeProtocolPart(string value)
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(value ?? string.Empty));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string EncodeProtocolPart(string value)
+        {
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+        }
+
+        private static string EncodePayload(UserSyncPayload payload)
+        {
+            return EncodeProtocolPart(JsonSerializer.Serialize(payload ?? new UserSyncPayload()));
+        }
+
+        private static UserSyncPayload DecodePayload(string value)
+        {
+            try
+            {
+                string json = DecodeProtocolPart(value);
+                return JsonSerializer.Deserialize<UserSyncPayload>(json);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static UserSyncPayload MapUserToPayload(LocalDBMSSQLLocalDBContext db, User user)
+        {
+            UserSyncPayload payload = new UserSyncPayload
+            {
+                UserName = user.UserName,
+                TotalExp = user.TotalExp,
+                SelectedTank = user.SelectedTank
+            };
+
+            foreach (UserTank tank in db.UserTanks.Where(t => t.UserId == user.Id).ToList())
+            {
+                payload.Tanks.Add(new TankSyncPayload
+                {
+                    TankType = tank.TankType,
+                    Level = tank.Level,
+                    CurrentExp = tank.CurrentExp,
+                    IsUnlocked = tank.IsUnlocked
+                });
+            }
+
+            return payload;
+        }
+
+        private static void ApplyPayloadToUser(LocalDBMSSQLLocalDBContext db, User user, UserSyncPayload payload)
+        {
+            user.TotalExp = payload.TotalExp;
+            user.SelectedTank = payload.SelectedTank;
+            user.UpdatedAt = DateTime.UtcNow;
+            db.SaveChanges();
+
+            for (int tankType = 0; tankType <= 4; tankType++)
+            {
+                TankSyncPayload tankPayload = payload.Tanks.FirstOrDefault(t => t.TankType == tankType);
+                UserTank tank = db.UserTanks.FirstOrDefault(t => t.UserId == user.Id && t.TankType == tankType);
+                if (tank == null)
+                {
+                    tank = new UserTank
+                    {
+                        UserId = user.Id,
+                        TankType = tankType
+                    };
+                    db.UserTanks.Add(tank);
+                }
+
+                tank.Level = tankPayload != null ? tankPayload.Level : 1;
+                tank.CurrentExp = tankPayload != null ? tankPayload.CurrentExp : 0;
+                tank.IsUnlocked = tankPayload != null ? tankPayload.IsUnlocked : tankType == 0;
+            }
+
+            db.SaveChanges();
+        }
+
+        private static string HashPassword(string password)
+        {
+            byte[] salt = new byte[16];
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(salt);
+            }
+
+            const int iterations = 100000;
+            using (Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256))
+            {
+                byte[] hash = pbkdf2.GetBytes(32);
+                return "PBKDF2$" + iterations + "$" + Convert.ToBase64String(salt) + "$" + Convert.ToBase64String(hash);
+            }
+        }
+
+        private static bool VerifyPassword(string password, string storedHash)
+        {
+            if (string.IsNullOrWhiteSpace(storedHash))
+            {
+                return false;
+            }
+
+            string[] parts = storedHash.Split('$');
+            if (parts.Length != 4 || parts[0] != "PBKDF2")
+            {
+                return false;
+            }
+
+            int iterations;
+            if (!int.TryParse(parts[1], out iterations))
+            {
+                return false;
+            }
+
+            byte[] salt = Convert.FromBase64String(parts[2]);
+            byte[] expectedHash = Convert.FromBase64String(parts[3]);
+            using (Rfc2898DeriveBytes pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256))
+            {
+                byte[] actualHash = pbkdf2.GetBytes(expectedHash.Length);
+                return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+            }
+        }
+
+        private static string CreateAuthToken()
+        {
+            byte[] bytes = new byte[32];
+            using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(bytes);
+            }
+
+            return Convert.ToBase64String(bytes);
         }
 
         private static string CreateAutoRoomId(string prefix)
@@ -279,6 +602,7 @@ namespace Peace_of_Tanks_Server
 
             public string PlayerName { get; set; }
             public string RoomId { get; set; }
+            public int TankType { get; set; }
             public SessionRole Role { get; set; }
             public ClientSession Peer { get; set; }
             public bool IsLobby { get; set; }

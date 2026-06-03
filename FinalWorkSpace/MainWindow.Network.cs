@@ -20,6 +20,8 @@ namespace Peace_of_Tanks
         private bool networkWaiting;
         private bool networkSessionStarted;
         private bool suppressDisconnectMessage;
+        private TankType networkPlayer1TankType = TankType.Green;
+        private TankType networkPlayer2TankType = TankType.Green;
 
         private bool IsNetworkGuest
         {
@@ -77,8 +79,23 @@ namespace Peace_of_Tanks
 
         private bool TryHandleNetworkGlobalKeyDown(KeyEventArgs e)
         {
-            if (modeMenu == 0 && !networkWaiting && !networkSessionStarted && e.KeyCode == Keys.N)
+            if (modeMenu == 0 && e.KeyCode == Keys.N)
             {
+                if (networkClient != null && networkClient.IsConnected)
+                {
+                    networkStatusLabel.Text = networkWaiting
+                        ? "已连接服务器，正在等待其他玩家加入..."
+                        : "服务器已经连接。";
+                    UpdateNetworkUiVisibility();
+                    return true;
+                }
+
+                if (networkWaiting || networkSessionStarted)
+                {
+                    UpdateNetworkUiVisibility();
+                    return true;
+                }
+
                 BeginNetworkConnect();
                 return true;
             }
@@ -103,16 +120,36 @@ namespace Peace_of_Tanks
 
         private void BeginNetworkConnect()
         {
-            NetworkConfig config;
-            if (!NetworkConfigDialog.ShowDialog(this, out config))
+            if (networkClient != null && networkClient.IsConnected)
             {
+                networkStatusLabel.Text = networkWaiting
+                    ? "已连接服务器，正在等待其他玩家加入..."
+                    : "服务器已经连接。";
+                UpdateNetworkUiVisibility();
                 return;
             }
 
-            BeginNetworkConnect(config);
+            while (true)
+            {
+                NetworkConfig config;
+                if (!NetworkConfigDialog.ShowDialog(this, out config))
+                {
+                    return;
+                }
+
+                if (BeginNetworkConnect(config, true))
+                {
+                    return;
+                }
+            }
         }
 
         private void BeginNetworkConnect(NetworkConfig config)
+        {
+            BeginNetworkConnect(config, false);
+        }
+
+        private bool BeginNetworkConnect(NetworkConfig config, bool allowRetry)
         {
             CloseNetworkConnection();
 
@@ -121,11 +158,12 @@ namespace Peace_of_Tanks
             networkClient.Disconnected += NetworkClient_Disconnected;
 
             string error;
-            if (!networkClient.Connect(config.ServerHost, config.ServerPort, config.PlayerName, config.JoinMode, config.RoomId, out error))
+            if (!networkClient.Connect(config.ServerHost, config.ServerPort, config.PlayerName, config.JoinMode, config.RoomId, config.TankType, out error))
             {
-                MessageBox.Show(this, "连接服务器失败：" + error, "联机失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                string retryText = allowRetry ? "请重新输入服务器地址。" : "请返回大厅重新输入服务器地址。";
+                MessageBox.Show(this, "连接服务器失败：" + error + Environment.NewLine + "当前只能进行单机游戏，" + retryText, "联机失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 CloseNetworkConnection();
-                return;
+                return false;
             }
 
             activeNetworkConfig = config;
@@ -133,6 +171,7 @@ namespace Peace_of_Tanks
             networkWaiting = true;
             networkStatusLabel.Text = "已连接服务器，等待另一名玩家加入...";
             UpdateNetworkUiVisibility();
+            return true;
         }
 
         private void NetworkClient_LineReceived(string line)
@@ -191,6 +230,8 @@ namespace Peace_of_Tanks
             {
                 string[] parts = line.Split('|');
                 string role = parts.Length > 1 ? parts[1] : string.Empty;
+                networkPlayer1TankType = ParseTankType(parts.Length > 3 ? parts[3] : null, selectedTankType);
+                networkPlayer2TankType = ParseTankType(parts.Length > 4 ? parts[4] : null, TankType.Green);
                 StartNetworkSession(role.Equals("HOST", StringComparison.OrdinalIgnoreCase));
                 return;
             }
@@ -276,6 +317,7 @@ namespace Peace_of_Tanks
 
             if (isHost)
             {
+                ApplyNetworkPlayerTankImages();
                 ApplyDifficultySettings(activeNetworkConfig != null ? activeNetworkConfig.Difficulty : NetworkDifficulty.Easy);
                 setting.twoPlayer = true;
                 networkStatusLabel.Text = "联机已匹配成功，你是主机端，负责同步游戏状态。";
@@ -286,7 +328,7 @@ namespace Peace_of_Tanks
                 setting.twoPlayer = true;
                 networkStatusLabel.Text = "联机已匹配成功，你是副机端，等待主机同步状态...";
                 modeMenu = 8;
-                timer1.Interval = 25;
+                timer1.Interval = GameTiming.TimerIntervalMs;
                 timer1.Enabled = true;
                 RefreshBattleBackground();
                 grMain.DrawImage(backgroundMemory, 0, 0);
@@ -310,7 +352,7 @@ namespace Peace_of_Tanks
                 setting.pointsPlayer2 = 0;
                 setting.speedEnemy = 2;
                 setting.pointsForEnemy = 80;
-                setting.timeSpawn = 300;
+                setting.timeSpawn = GameTiming.ScaleLegacyTicks(300);
                 setting.pointsForPlayers = 500;
             }
             else if (difficulty == NetworkDifficulty.Medium)
@@ -326,7 +368,7 @@ namespace Peace_of_Tanks
                 setting.pointsPlayer2 = 0;
                 setting.speedEnemy = 4;
                 setting.pointsForEnemy = 90;
-                setting.timeSpawn = 100;
+                setting.timeSpawn = GameTiming.ScaleLegacyTicks(100);
                 setting.pointsForPlayers = 750;
             }
             else
@@ -342,7 +384,7 @@ namespace Peace_of_Tanks
                 setting.pointsPlayer2 = 0;
                 setting.speedEnemy = 5;
                 setting.pointsForEnemy = 100;
-                setting.timeSpawn = 50;
+                setting.timeSpawn = GameTiming.ScaleLegacyTicks(50);
                 setting.pointsForPlayers = 1000;
             }
         }
@@ -455,13 +497,13 @@ namespace Peace_of_Tanks
         {
             if (firstPlayer && player1.message.isSpace && player1.message.pauseSpace == 0)
             {
-                player1.message.pauseSpace = 10;
+                player1.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
                 bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1, player1.attack));
             }
 
             if (secondPlayer && player2.message.isSpace && player2.message.pauseSpace == 0)
             {
-                player2.message.pauseSpace = 10;
+                player2.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
                 bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2, player2.attack));
             }
         }
@@ -495,6 +537,8 @@ namespace Peace_of_Tanks
                 LivesPlayer2 = setting.lifesPlayer2,
                 PointsPlayer1 = setting.pointsPlayer1,
                 PointsPlayer2 = setting.pointsPlayer2,
+                KillsPlayer1 = player1Kills,
+                KillsPlayer2 = player2Kills,
                 EnemiesLeft = setting.countEnemies,
                 GameOver = gameOver,
                 StatusText = gameOver ? "主机端已结束本局游戏。" : "联机中：已同步主机画面"
@@ -507,7 +551,8 @@ namespace Peace_of_Tanks
                 Direction = player1.direction,
                 HitPoints = player1.hitpoints,
                 Active = firstPlayer,
-                Kind = 1
+                Kind = 1,
+                TankType = (int)networkPlayer1TankType
             };
             snapshot.Player2 = new TankSnapshot
             {
@@ -516,7 +561,8 @@ namespace Peace_of_Tanks
                 Direction = player2.direction,
                 HitPoints = player2.hitpoints,
                 Active = secondPlayer,
-                Kind = 2
+                Kind = 2,
+                TankType = (int)networkPlayer2TankType
             };
 
             for (int i = 0; i < enemies.Count; i++)
@@ -553,6 +599,17 @@ namespace Peace_of_Tanks
                 });
             }
 
+            for (int i = 0; i < animations.Count; i++)
+            {
+                snapshot.Animations.Add(new AnimationSnapshot
+                {
+                    X = animations[i].message.x,
+                    Y = animations[i].message.y,
+                    Type = animations[i].message.type,
+                    Delay = animations[i].message.delay
+                });
+            }
+
             return snapshot;
         }
 
@@ -561,6 +618,7 @@ namespace Peace_of_Tanks
             if (box is Box_Wall) return 0;
             if (box is Box_Water) return 1;
             if (box is Box_Green) return 2;
+            if (box is Box_Base) return 4;
             return 3;
         }
 
@@ -610,13 +668,15 @@ namespace Peace_of_Tanks
 
             if (snapshot.Player1.Active)
             {
-                DrawRotatedImage(grMemory, Peace_of_Tanks.Properties.Resources.player1_1,
+                DrawTankGlow(snapshot.Player1.X, snapshot.Player1.Y, IsNetworkGuest ? Color.FromArgb(255, 82, 82) : Color.FromArgb(80, 235, 120));
+                DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Player1),
                     snapshot.Player1.X, snapshot.Player1.Y, 50, 50, snapshot.Player1.Direction);
             }
 
             if (snapshot.Player2.Active)
             {
-                DrawRotatedImage(grMemory, Peace_of_Tanks.Properties.Resources.player2_1,
+                DrawTankGlow(snapshot.Player2.X, snapshot.Player2.Y, IsNetworkGuest ? Color.FromArgb(80, 235, 120) : Color.FromArgb(255, 82, 82));
+                DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Player2),
                     snapshot.Player2.X, snapshot.Player2.Y, 50, 50, snapshot.Player2.Direction);
             }
 
@@ -626,6 +686,11 @@ namespace Peace_of_Tanks
                 {
                     grMemory.DrawImage(GetBoxImage(snapshot.Boxes[i].Type), snapshot.Boxes[i].X, snapshot.Boxes[i].Y, 25, 25);
                 }
+            }
+
+            for (int i = 0; i < snapshot.Animations.Count; i++)
+            {
+                DrawSnapshotAnimation(snapshot.Animations[i]);
             }
 
             if (snapshot.GameOver)
@@ -657,6 +722,7 @@ namespace Peace_of_Tanks
 
             DrawNumber(snapshot.PointsPlayer1, 255, 760);
             DrawNumber(snapshot.PointsPlayer2, 633, 760);
+            DrawKillHud(snapshot.KillsPlayer1, snapshot.KillsPlayer2);
         }
 
         private void DrawNumber(int value, int x, int y)
@@ -686,10 +752,59 @@ namespace Peace_of_Tanks
 
         private Bitmap GetBoxImage(int type)
         {
-            if (type == 0) return Peace_of_Tanks.Properties.Resources.wall;
-            if (type == 1) return Peace_of_Tanks.Properties.Resources.water;
-            if (type == 2) return Peace_of_Tanks.Properties.Resources.green;
-            return Peace_of_Tanks.Properties.Resources.iron;
+            if (type == 0) return ResourceManager.TerrainWall ?? Peace_of_Tanks.Properties.Resources.wall;
+            if (type == 1) return ResourceManager.TerrainWater ?? Peace_of_Tanks.Properties.Resources.water;
+            if (type == 2) return ResourceManager.TerrainGrass ?? Peace_of_Tanks.Properties.Resources.green;
+            if (type == 4) return ResourceManager.TerrainBase ?? Peace_of_Tanks.Properties.Resources.base_tile;
+            return ResourceManager.TerrainIron ?? Peace_of_Tanks.Properties.Resources.iron;
+        }
+
+        private void DrawSnapshotAnimation(AnimationSnapshot animation)
+        {
+            Bitmap image = Animation.GetFrameImage(animation.Type, animation.Delay);
+            if (image == null)
+            {
+                return;
+            }
+
+            if (animation.Type == 0)
+            {
+                grMemory.DrawImage(image, animation.X - 10, animation.Y - 10, 60, 60);
+            }
+            else
+            {
+                grMemory.DrawImage(image, animation.X - 30, animation.Y - 30, 120, 120);
+            }
+        }
+
+        private void DrawTankGlow(int x, int y, Color color)
+        {
+            BaseTank.DrawGlow(grMemory, x, y, 50, 50, color);
+        }
+
+        private Bitmap GetTankSnapshotImage(TankSnapshot snapshot)
+        {
+            TankType type = ParseTankType(snapshot.TankType.ToString(), TankType.Green);
+            return TankResourceLoader.GetPlayerTankImages(type).Item1;
+        }
+
+        private TankType ParseTankType(string value, TankType fallback)
+        {
+            int parsed;
+            if (int.TryParse(value, out parsed) && parsed >= 0 && parsed <= 4)
+            {
+                return (TankType)parsed;
+            }
+
+            return fallback;
+        }
+
+        private void ApplyNetworkPlayerTankImages()
+        {
+            var player1Images = TankResourceLoader.GetPlayerTankImages(networkPlayer1TankType);
+            var player2Images = TankResourceLoader.GetPlayerTankImages(networkPlayer2TankType);
+            player1.SetImages(player1Images.Item1, player1Images.Item2);
+            player2.SetImages(player2Images.Item1, player2Images.Item2);
         }
 
         private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, int direction)

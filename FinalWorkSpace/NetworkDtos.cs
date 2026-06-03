@@ -24,6 +24,7 @@ namespace Peace_of_Tanks
         public int HitPoints;
         public bool Active;
         public int Kind;
+        public int TankType;
     }
 
     [Serializable]
@@ -44,6 +45,15 @@ namespace Peace_of_Tanks
     }
 
     [Serializable]
+    internal class AnimationSnapshot
+    {
+        public int X;
+        public int Y;
+        public int Type;
+        public int Delay;
+    }
+
+    [Serializable]
     internal class PlayerResultSnapshot
     {
         public string Name = string.Empty;
@@ -60,6 +70,8 @@ namespace Peace_of_Tanks
         public int LivesPlayer2;
         public int PointsPlayer1;
         public int PointsPlayer2;
+        public int KillsPlayer1;
+        public int KillsPlayer2;
         public int EnemiesLeft;
         public bool GameOver;
         public string StatusText = string.Empty;
@@ -68,6 +80,7 @@ namespace Peace_of_Tanks
         public List<TankSnapshot> Enemies = new List<TankSnapshot>();
         public List<BulletSnapshot> Bullets = new List<BulletSnapshot>();
         public List<BoxSnapshot> Boxes = new List<BoxSnapshot>();
+        public List<AnimationSnapshot> Animations = new List<AnimationSnapshot>();
         public List<PlayerResultSnapshot> Results = new List<PlayerResultSnapshot>();
     }
 
@@ -115,6 +128,7 @@ namespace Peace_of_Tanks
         public string ServerHost = "127.0.0.1";
         public int ServerPort = 51888;
         public string PlayerName = "玩家";
+        public TankType TankType = TankType.Green;
         public NetworkDifficulty Difficulty = NetworkDifficulty.Easy;
         public NetworkJoinMode JoinMode = NetworkJoinMode.Search;
         public string RoomId = string.Empty;

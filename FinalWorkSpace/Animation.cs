@@ -65,5 +65,21 @@ namespace Peace_of_Tanks
             else if (message.type == 1)
                 grMemory.DrawImage(picture, message.x - 30, message.y - 30, 120, 120);  // 爆炸效果
         }
+
+        public static Bitmap GetFrameImage(int type, int delay)
+        {
+            if (type == 0)
+            {
+                if (delay >= 3) return ResourceManager.HitEffect1 ?? boom1;
+                if (delay == 2) return ResourceManager.HitEffect2 ?? boom2;
+                return ResourceManager.HitEffect3 ?? boom3;
+            }
+
+            if (delay >= 5) return ResourceManager.ExplosionEffect1 ?? megaBoom1;
+            if (delay == 4) return ResourceManager.ExplosionEffect2 ?? megaBoom1;
+            if (delay == 3) return ResourceManager.ExplosionEffect3 ?? megaBoom2;
+            if (delay == 2) return ResourceManager.ExplosionEffect4 ?? megaBoom2;
+            return ResourceManager.ExplosionEffect5 ?? megaBoom2;
+        }
     }
 }

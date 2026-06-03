@@ -22,8 +22,8 @@ namespace Peace_of_Tanks
 
     public class EnemyEventArgs : EventArgs
     {
-        public int pauseSpace = 50;
-        public int pauseTurn = 100;
+        public int pauseSpace = GameTiming.ScaleLegacyTicks(50);
+        public int pauseTurn = GameTiming.ScaleLegacyTicks(100);
         public int goToPlayer;
         public static int player1X, player1Y, player2X, player2Y;
         public static int players; // 0 - no, 1 - 1 player, 2 - 2 player, 3 - both
@@ -36,7 +36,8 @@ namespace Peace_of_Tanks
 
     public class BaseTank
     {
-        protected const double MoveSpeed = 1.5;
+        protected static readonly double MoveSpeed = GameTiming.ScaleDistance(1.5);
+        protected const int TankSize = 50;
         protected Bitmap pictureTank, pictureTank1, pictureTank2;
         protected bool changePicture;
         public Bitmap pictureBullet;
@@ -80,6 +81,15 @@ namespace Peace_of_Tanks
             this.attack = attack;
         }
 
+        public void SetImages(Bitmap pictureTank1, Bitmap pictureTank2)
+        {
+            pictureTank1.MakeTransparent(Color.Black);
+            pictureTank2.MakeTransparent(Color.Black);
+            this.pictureTank1 = pictureTank1;
+            this.pictureTank2 = pictureTank2;
+            pictureTank = changePicture ? pictureTank2 : pictureTank1;
+        }
+
         public void RotatePicture(Bitmap pictureTank, int direct, bool isUp, bool isDown, bool isLeft, bool isRight)
         {
             if (isLeft && direct == 2) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipX);
@@ -115,7 +125,52 @@ namespace Peace_of_Tanks
 
         public void Draw(Graphics grMemory)
         {
-            grMemory.DrawImage(pictureTank, x, y, 50, 50);
+            Draw(grMemory, Color.Empty);
+        }
+
+        public void Draw(Graphics grMemory, Color glowColor)
+        {
+            DrawGlow(grMemory, x, y, TankSize, TankSize, glowColor);
+            grMemory.DrawImage(pictureTank, x, y, TankSize, TankSize);
+        }
+
+        public static void DrawGlow(Graphics graphics, int x, int y, int width, int height, Color glowColor)
+        {
+            if (glowColor == Color.Empty)
+            {
+                return;
+            }
+
+            int centerX = x + width / 2;
+            int centerY = y + height / 2;
+            for (int i = 0; i < 4; i++)
+            {
+                int expand = 16 - i * 4;
+                int alpha = 34 + i * 18;
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(alpha, glowColor)))
+                {
+                    graphics.FillEllipse(
+                        brush,
+                        centerX - width / 2 - expand,
+                        centerY - height / 2 - expand,
+                        width + expand * 2,
+                        height + expand * 2);
+                }
+            }
+        }
+
+        protected bool IsInsideBattlefield(Form mainWindow, int nextX, int nextY)
+        {
+            if (mainWindow == null)
+            {
+                return true;
+            }
+
+            Rectangle bounds = mainWindow.ClientRectangle;
+            return nextX >= bounds.Left
+                && nextY >= bounds.Top
+                && nextX + TankSize <= bounds.Right
+                && nextY + TankSize <= bounds.Bottom;
         }
     }
 
@@ -141,6 +196,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, false, false, true, false);
                 RotatePicture(pictureTank2, direction, false, false, true, false);
                 direction = 0;
+                if (!IsInsideBattlefield(MainWindow, x - difference, y))
+                {
+                    return;
+                }
+
                 for (int i = 0; i < boxes.Count; i++)
                 {
                     if (Collisions.check_touch(x - difference, y, boxes[i], MainWindow))
@@ -172,6 +232,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, true, false, false, false);
                 RotatePicture(pictureTank2, direction, true, false, false, false);
                 direction = 2;
+                if (!IsInsideBattlefield(MainWindow, x, y - difference))
+                {
+                    return;
+                }
+
                 for (int i = 0; i < boxes.Count; i++)
                 {
                     if (Collisions.check_touch(x, y - difference, boxes[i], MainWindow))
@@ -203,6 +268,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, false, false, false, true);
                 RotatePicture(pictureTank2, direction, false, false, false, true);
                 direction = 1;
+                if (!IsInsideBattlefield(MainWindow, x + difference, y))
+                {
+                    return;
+                }
+
                 for (int i = 0; i < boxes.Count; i++)
                 {
                     if (Collisions.check_touch(x + difference, y, boxes[i], MainWindow))
@@ -234,6 +304,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, false, true, false, false);
                 RotatePicture(pictureTank2, direction, false, true, false, false);
                 direction = 3;
+                if (!IsInsideBattlefield(MainWindow, x, y + difference))
+                {
+                    return;
+                }
+
                 for (int i = 0; i < boxes.Count; i++)
                 {
                     if (Collisions.check_touch(x, y + difference, boxes[i], MainWindow))
@@ -361,6 +436,10 @@ namespace Peace_of_Tanks
             int chanceDirectionPlayer = ranNumber.Next(0, 2);  // вероятность что на этом движении он будет двигаться в направлении игроков
 
             bool[] nums = new bool[4] { false, false, false, false };
+            nums[0] = !IsInsideBattlefield(MainWindow, x - difference, y);
+            nums[1] = !IsInsideBattlefield(MainWindow, x + difference, y);
+            nums[2] = !IsInsideBattlefield(MainWindow, x, y - difference);
+            nums[3] = !IsInsideBattlefield(MainWindow, x, y + difference);
 
             for (int i = 0; i < boxes.Count; i++)
             {
@@ -386,7 +465,7 @@ namespace Peace_of_Tanks
                 return 4;
             else if (message.pauseTurn == 0)
             {
-                message.pauseTurn = 100;
+                message.pauseTurn = GameTiming.ScaleLegacyTicks(100);
                 int stop = 20;
 
                 if(chanceDirectionPlayer == 0 && EnemyEventArgs.players != 0)
@@ -453,6 +532,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank2, direction, false, false, true, false);
                 direction = 0;
 
+                if (!IsInsideBattlefield(MainWindow, x - difference, y))
+                {
+                    return;
+                }
+
                 int I = 0;
                 for (int i = 0; i < tanks.Count; i++)
                     if (tanks[i].x == x && tanks[i].y == y)
@@ -476,6 +560,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, true, false, false, false);
                 RotatePicture(pictureTank2, direction, true, false, false, false);
                 direction = 2;
+
+                if (!IsInsideBattlefield(MainWindow, x, y - difference))
+                {
+                    return;
+                }
 
                 RotatePicture(pictureTank1, direction, true, false, false, false);
                 RotatePicture(pictureTank2, direction, true, false, false, false);
@@ -512,6 +601,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank2, direction, false, false, false, true);
                 direction = 1;
 
+                if (!IsInsideBattlefield(MainWindow, x + difference, y))
+                {
+                    return;
+                }
+
                 int I = 0;
                 for (int i = 0; i < tanks.Count; i++)
                     if (tanks[i].x == x && tanks[i].y == y)
@@ -535,6 +629,11 @@ namespace Peace_of_Tanks
                 RotatePicture(pictureTank1, direction, false, true, false, false);
                 RotatePicture(pictureTank2, direction, false, true, false, false);
                 direction = 3;
+
+                if (!IsInsideBattlefield(MainWindow, x, y + difference))
+                {
+                    return;
+                }
 
                 int I = 0;
                 for (int i = 0; i < tanks.Count; i++)
@@ -561,7 +660,7 @@ namespace Peace_of_Tanks
             if (message.pauseSpace < 0)
             {
                 Bullet bullet = new Bullet(Peace_of_Tanks.Properties.Resources.bulletEnemy, x, y, direction, 0, attack);
-                message.pauseSpace = 50;
+                message.pauseSpace = GameTiming.ScaleLegacyTicks(50);
                 bullets.Add(bullet);
             }
         }
