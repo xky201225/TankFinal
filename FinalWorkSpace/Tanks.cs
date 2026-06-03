@@ -47,6 +47,8 @@ namespace Peace_of_Tanks
         public TankType TankType = TankType.Green;
         public double speedMultiplier = 1.0;
         public double bulletSpeedMultiplier = 1.0;
+        public double cooldownSeconds = 3.0;
+        public DateTime nextFireAvailableAtUtc = DateTime.MinValue;
         protected double preciseX, preciseY;
         public int direction; //0 - left, 1 - right, 2 - up, 3 - down
         public int x
@@ -348,6 +350,7 @@ namespace Peace_of_Tanks
 
     class EnemyTank : BaseTank
     {
+        private const double EnemyFireIntervalSeconds = 1.0;
         Random ranNumber = new Random();
 
         int difference = 1;
@@ -358,6 +361,8 @@ namespace Peace_of_Tanks
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
         {
             message = new EnemyEventArgs();
+            cooldownSeconds = EnemyFireIntervalSeconds;
+            nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             goToPlayer = ranNumber.Next(1, 3);
         }
 
@@ -365,6 +370,8 @@ namespace Peace_of_Tanks
             : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction, health, attack)
         {
             message = new EnemyEventArgs();
+            cooldownSeconds = EnemyFireIntervalSeconds;
+            nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             goToPlayer = ranNumber.Next(1, 3);
         }
 
@@ -665,10 +672,11 @@ namespace Peace_of_Tanks
             {
                 changePictureFun();
             }
-            if (message.pauseSpace < 0)
+            DateTime now = DateTime.UtcNow;
+            if (now >= nextFireAvailableAtUtc)
             {
                 Bullet bullet = new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, direction, 0, attack, bulletSpeedMultiplier);
-                message.pauseSpace = GameTiming.ScaleLegacyTicks(50);
+                nextFireAvailableAtUtc = now.AddSeconds(cooldownSeconds);
                 bullets.Add(bullet);
             }
         }

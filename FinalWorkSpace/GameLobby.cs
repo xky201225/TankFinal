@@ -690,7 +690,7 @@ namespace Peace_of_Tanks
             int index = 0;
             foreach (TankType type in Enum.GetValues(typeof(TankType)))
             {
-                pageControls.Add(CreateTankCard(type, new Point(x + (index % 3) * 280, y + (index / 3) * 235)));
+                pageControls.Add(CreateTankCard(type, new Point(x + (index % 3) * 280, y + (index / 3) * 255)));
                 index++;
             }
 
@@ -730,7 +730,7 @@ namespace Peace_of_Tanks
                 PlayerData = playerData,
                 IsSelected = selectedTank == type,
                 CanUnlock = canUnlock,
-                Size = new Size(250, 210),
+                Size = new Size(250, 230),
                 Location = location
             };
 
@@ -1311,11 +1311,12 @@ namespace Peace_of_Tanks
 
         private sealed class TankCardControl : Control
         {
-            private readonly Rectangle selectRect = new Rectangle(18, 168, 94, 28);
-            private readonly Rectangle speedUpgradeRect = new Rectangle(126, 132, 52, 24);
-            private readonly Rectangle attackUpgradeRect = new Rectangle(184, 132, 52, 24);
-            private readonly Rectangle healthUpgradeRect = new Rectangle(126, 162, 52, 24);
-            private readonly Rectangle bulletSpeedUpgradeRect = new Rectangle(184, 162, 52, 24);
+            private readonly Rectangle selectRect = new Rectangle(18, 190, 94, 28);
+            private readonly Rectangle speedUpgradeRect = new Rectangle(126, 126, 52, 24);
+            private readonly Rectangle attackUpgradeRect = new Rectangle(184, 126, 52, 24);
+            private readonly Rectangle healthUpgradeRect = new Rectangle(126, 154, 52, 24);
+            private readonly Rectangle bulletSpeedUpgradeRect = new Rectangle(184, 154, 52, 24);
+            private readonly Rectangle cooldownUpgradeRect = new Rectangle(126, 182, 110, 24);
             private bool hoverSelect;
             private TankUpgradeType? hoverUpgrade;
 
@@ -1415,12 +1416,13 @@ namespace Peace_of_Tanks
                     {
                         int attack = TankConfig.GetAttackAtLevel(TankData.AttackLevel);
                         int health = TankConfig.GetHealthAtLevel(TankData.HealthLevel);
+                        double cooldown = TankConfig.GetCooldownSecondsAtLevel(TankData.CooldownLevel);
                         stats = TankData.IsUnlocked
-                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5"
+                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\nCD " + cooldown.ToString("0.0") + "s Lv" + TankData.CooldownLevel + "/5"
                             : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n解锁 " + TankConfig.UnlockExp;
                     }
 
-                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 52, 124, 70));
+                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 50, 124, 76));
                 }
 
                 if (IsSelected)
@@ -1439,6 +1441,7 @@ namespace Peace_of_Tanks
                 DrawActionButton(e.Graphics, attackUpgradeRect, "攻+" + GetUpgradeCostText(TankUpgradeType.Attack), CanUpgrade(TankUpgradeType.Attack), hoverUpgrade == TankUpgradeType.Attack);
                 DrawActionButton(e.Graphics, healthUpgradeRect, "命+" + GetUpgradeCostText(TankUpgradeType.Health), CanUpgrade(TankUpgradeType.Health), hoverUpgrade == TankUpgradeType.Health);
                 DrawActionButton(e.Graphics, bulletSpeedUpgradeRect, "弹+" + GetUpgradeCostText(TankUpgradeType.BulletSpeed), CanUpgrade(TankUpgradeType.BulletSpeed), hoverUpgrade == TankUpgradeType.BulletSpeed);
+                DrawActionButton(e.Graphics, cooldownUpgradeRect, "CD+" + GetUpgradeCostText(TankUpgradeType.Cooldown), CanUpgrade(TankUpgradeType.Cooldown), hoverUpgrade == TankUpgradeType.Cooldown);
             }
 
             private TankUpgradeType? GetUpgradeTypeAt(Point point)
@@ -1447,6 +1450,7 @@ namespace Peace_of_Tanks
                 if (attackUpgradeRect.Contains(point)) return TankUpgradeType.Attack;
                 if (healthUpgradeRect.Contains(point)) return TankUpgradeType.Health;
                 if (bulletSpeedUpgradeRect.Contains(point)) return TankUpgradeType.BulletSpeed;
+                if (cooldownUpgradeRect.Contains(point)) return TankUpgradeType.Cooldown;
                 return null;
             }
 

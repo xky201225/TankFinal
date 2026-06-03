@@ -18,6 +18,7 @@ namespace Peace_of_Tanks
         public int AttackLevel { get; set; }
         public int HealthLevel { get; set; }
         public int BulletSpeedLevel { get; set; }
+        public int CooldownLevel { get; set; }
         public int CurrentExp { get; set; }
         public bool IsUnlocked { get; set; }
     }

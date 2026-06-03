@@ -304,6 +304,10 @@ namespace Peace_of_Tanks
             if (firstPlayer)
             {
                 player1.message.isSpace = pressed;
+                if (pressed)
+                {
+                    TryFirePlayer(player1, 1);
+                }
             }
         }
 
@@ -1134,12 +1138,30 @@ namespace Peace_of_Tanks
         private void RelocateOverlappingTanks()
         {
             List<BaseTank> placed = new List<BaseTank>();
-            foreach (BaseTank tank in tanks)
+            foreach (BaseTank tank in GetActiveTanks())
             {
                 Point safePoint = FindSafeSpawnPoint(tank.x, tank.y, placed);
                 tank.x = safePoint.X;
                 tank.y = safePoint.Y;
                 placed.Add(tank);
+            }
+        }
+
+        private IEnumerable<BaseTank> GetActiveTanks()
+        {
+            if (firstPlayer)
+            {
+                yield return player1;
+            }
+
+            if (secondPlayer)
+            {
+                yield return player2;
+            }
+
+            foreach (EnemyTank enemy in enemies)
+            {
+                yield return enemy;
             }
         }
 
@@ -1374,10 +1396,16 @@ namespace Peace_of_Tanks
                 gameoverX = 355; gameoverY = 10; pauseGameOver = GameTiming.ScaleLegacyTicks(GameOverSettlementDelayLegacyTicks);
 
                 firstPlayer = true;
+                secondPlayer = false;
+                tanks.Clear();
+                enemies.Clear();
                 tanks.Add(player1);
-                tanks.Add(player2);
 
                 player1.hitpoints = player1.maxHitpoints;
+                player1.message.pauseSpace = 0;
+                player2.message.pauseSpace = 0;
+                player1.nextFireAvailableAtUtc = DateTime.MinValue;
+                player2.nextFireAvailableAtUtc = DateTime.MinValue;
 
                 if (launchOptions != null && launchOptions.MapConfig != null)
                 {
@@ -1392,11 +1420,6 @@ namespace Peace_of_Tanks
 
                 timeSpawn = setting.timeSpawn;
 
-                for (int i = 0; i < Math.Min(3, activeEnemyLimit); i++)
-                {
-                    SpawnEnemyAt(i);
-                }
-
                 Point player1Spawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[0, 0], level.masPointsSpawnPlayers[0, 1], null);
                 player1.x = player1Spawn.X;
                 player1.y = player1Spawn.Y;
@@ -1410,6 +1433,7 @@ namespace Peace_of_Tanks
                     Point player2Spawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[2, 0], level.masPointsSpawnPlayers[2, 1], tanks);
                     player2.x = player2Spawn.X;
                     player2.y = player2Spawn.Y;
+                    tanks.Add(player2);
                     MovePlayer2 += player2.Move;
                     picturePlayer2_.Visible = true;
                     secondPlayer = true;
@@ -1772,9 +1796,6 @@ namespace Peace_of_Tanks
             if (player1.message.pauseSpace > 0) player1.message.pauseSpace--;                    // 锌邪褍蟹邪 屑械卸写褍 胁褘褋褌褉械谢邪屑懈 褍 懈谐褉芯泻芯胁
             if (secondPlayer && player2.message.pauseSpace > 0) player2.message.pauseSpace--;     //
 
-            for (int i = 0; i < enemies.Count; i++) //锌邪褍蟹邪 屑械卸写褍 胁褘褋褌褉械谢邪屑懈 褍 斜芯褌芯胁
-                enemies[i].message.pauseSpace--;
-
             for (int i = 0; i < 8; i++)                                                         // 写胁懈卸械薪懈械 褌邪薪泻芯胁(胁薪褍褌褉懈 锌褉芯胁械褉泻邪 薪邪 褋芯锌褉懈泻芯褋薪芯胁械薪懈褟 褌邪薪泻芯胁)
             {
                 if (firstPlayer) MovePlayer1(this, null, player1.message, boxes, tanks);
@@ -1810,10 +1831,11 @@ namespace Peace_of_Tanks
             {
                 if(enemies[i].hitpoints <= 0)
                 {
-                    AddExplosionEffect(enemies[i].x, enemies[i].y);
+                    EnemyTank defeatedEnemy = enemies[i];
+                    AddExplosionEffect(defeatedEnemy.x, defeatedEnemy.y);
 
-                    MoveEnemy -= enemies[i].Move;
-                    tanks.RemoveAt(i + 2);
+                    MoveEnemy -= defeatedEnemy.Move;
+                    tanks.Remove(defeatedEnemy);
                     enemies.RemoveAt(i);
                     i--;
                     RefillEnemiesIfNeeded();
@@ -1842,6 +1864,7 @@ namespace Peace_of_Tanks
                 {
                     player2.x = player2.y = -50;
                     secondPlayer = false;
+                    tanks.Remove(player2);
                 }
                     
             }
@@ -1867,6 +1890,7 @@ namespace Peace_of_Tanks
                 {
                     player1.x = player1.y = -50;
                     firstPlayer = false;
+                    tanks.Remove(player1);
                 }
             }
 
@@ -1927,6 +1951,7 @@ namespace Peace_of_Tanks
             player1 = new PlayerTank(tankImg1, tankImg2, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -100, -100, 2, health, attack);
             player1.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(playerTankData.SpeedLevel);
             player1.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(playerTankData.BulletSpeedLevel);
+            player1.cooldownSeconds = TankConfig.GetCooldownSecondsAtLevel(playerTankData.CooldownLevel);
             player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2, config.BaseHealth, config.BaseAttack);
 
             string statsPath = AppPaths.GetDataPath("stats.dat");

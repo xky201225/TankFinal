@@ -203,6 +203,7 @@ namespace Peace_of_Tanks_Server
                             AttackLevel = 0,
                             HealthLevel = 0,
                             BulletSpeedLevel = 0,
+                            CooldownLevel = 0,
                             CurrentExp = 0,
                             IsUnlocked = tankType == 0
                         });
@@ -472,6 +473,7 @@ namespace Peace_of_Tanks_Server
                     AttackLevel = tank.AttackLevel,
                     HealthLevel = tank.HealthLevel,
                     BulletSpeedLevel = tank.BulletSpeedLevel,
+                    CooldownLevel = tank.CooldownLevel,
                     CurrentExp = tank.CurrentExp,
                     IsUnlocked = tank.IsUnlocked
                 });
@@ -506,6 +508,7 @@ namespace Peace_of_Tanks_Server
                 tank.AttackLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.AttackLevel) : 0;
                 tank.HealthLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.HealthLevel) : 0;
                 tank.BulletSpeedLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.BulletSpeedLevel) : 0;
+                tank.CooldownLevel = tankPayload != null ? ClampUpgradeLevel(tankPayload.CooldownLevel) : 0;
                 tank.CurrentExp = tankPayload != null ? tankPayload.CurrentExp : 0;
                 tank.IsUnlocked = tankPayload != null ? tankPayload.IsUnlocked : tankType == 0;
             }

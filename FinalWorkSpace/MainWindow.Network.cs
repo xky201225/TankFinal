@@ -535,17 +535,29 @@ namespace Peace_of_Tanks
 
         private void ProcessPlayerFireInputs()
         {
-            if (firstPlayer && player1.message.isSpace && player1.message.pauseSpace == 0)
+            if (firstPlayer && player1.message.isSpace)
             {
-                player1.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
-                bullets.Add(new Bullet(player1.pictureBullet, player1.x, player1.y, player1.direction, 1, player1.attack, player1.bulletSpeedMultiplier));
+                TryFirePlayer(player1, 1);
             }
 
-            if (secondPlayer && player2.message.isSpace && player2.message.pauseSpace == 0)
+            if (secondPlayer && player2.message.isSpace)
             {
-                player2.message.pauseSpace = GameTiming.ScaleLegacyTicks(10);
-                bullets.Add(new Bullet(player2.pictureBullet, player2.x, player2.y, player2.direction, 2, player2.attack, player2.bulletSpeedMultiplier));
+                TryFirePlayer(player2, 2);
             }
+        }
+
+        private bool TryFirePlayer(PlayerTank player, int who)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (player == null || now < player.nextFireAvailableAtUtc)
+            {
+                return false;
+            }
+
+            player.nextFireAvailableAtUtc = now.AddSeconds(player.cooldownSeconds);
+            player.message.pauseSpace = 0;
+            bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.direction, who, player.attack, player.bulletSpeedMultiplier));
+            return true;
         }
 
         private void BroadcastSnapshot(bool gameOver)
@@ -858,6 +870,7 @@ namespace Peace_of_Tanks
             int attackLevel = 0;
             int healthLevel = 0;
             int bulletSpeedLevel = 0;
+            int cooldownLevel = 0;
             if (useLocalProgress)
             {
                 PlayerTankData tankData;
@@ -867,6 +880,7 @@ namespace Peace_of_Tanks
                     attackLevel = tankData.AttackLevel;
                     healthLevel = tankData.HealthLevel;
                     bulletSpeedLevel = tankData.BulletSpeedLevel;
+                    cooldownLevel = tankData.CooldownLevel;
                 }
             }
 
@@ -875,6 +889,7 @@ namespace Peace_of_Tanks
             tank.attack = config.GetAttackAtLevel(attackLevel);
             tank.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(speedLevel);
             tank.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(bulletSpeedLevel);
+            tank.cooldownSeconds = TankConfig.GetCooldownSecondsAtLevel(cooldownLevel);
         }
 
         private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, int direction)
@@ -963,6 +978,10 @@ namespace Peace_of_Tanks
             player2.hitpoints = player2.maxHitpoints;
             player1.message.clear();
             player2.message.clear();
+            player1.message.pauseSpace = 0;
+            player2.message.pauseSpace = 0;
+            player1.nextFireAvailableAtUtc = DateTime.MinValue;
+            player2.nextFireAvailableAtUtc = DateTime.MinValue;
             remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = false;
             guestInputState.Up = guestInputState.Down = guestInputState.Left = guestInputState.Right = guestInputState.Fire = false;
 

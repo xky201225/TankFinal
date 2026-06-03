@@ -80,6 +80,7 @@ public partial class LocalDBMSSQLLocalDBContext : DbContext
             entity.Property(e => e.AttackLevel).HasDefaultValue(0);
             entity.Property(e => e.HealthLevel).HasDefaultValue(0);
             entity.Property(e => e.BulletSpeedLevel).HasDefaultValue(0);
+            entity.Property(e => e.CooldownLevel).HasDefaultValue(0);
 
             entity.HasOne(d => d.User).WithMany(p => p.UserTanks)
                 .HasForeignKey(d => d.UserId)

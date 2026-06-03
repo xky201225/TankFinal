@@ -26,6 +26,8 @@ namespace Peace_of_Tanks
         private const double SpeedUpgradeMultiplier = 1.45;
         private const int AttackUpgradeBonus = 10;
         private const int HealthUpgradeBonus = 15;
+        private const double BaseCooldownSeconds = 3.0;
+        private const double CooldownReductionPerLevel = 0.5;
 
         public int GetAttackAtLevel(int attackLevel)
         {
@@ -45,6 +47,11 @@ namespace Peace_of_Tanks
         public static double GetBulletSpeedMultiplierAtLevel(int bulletSpeedLevel)
         {
             return Math.Pow(SpeedUpgradeMultiplier, bulletSpeedLevel);
+        }
+
+        public static double GetCooldownSecondsAtLevel(int cooldownLevel)
+        {
+            return Math.Max(0.5, BaseCooldownSeconds - cooldownLevel * CooldownReductionPerLevel);
         }
 
         public static int GetExpForUpgrade(int currentUpgradeLevel)
@@ -146,6 +153,7 @@ namespace Peace_of_Tanks
         public int AttackLevel { get; set; } = 0;
         public int HealthLevel { get; set; } = 0;
         public int BulletSpeedLevel { get; set; } = 0;
+        public int CooldownLevel { get; set; } = 0;
         public int CurrentExp { get; set; } = 0;
         public bool IsUnlocked { get; set; } = false;
 
@@ -168,6 +176,7 @@ namespace Peace_of_Tanks
                 case TankUpgradeType.Attack: return AttackLevel;
                 case TankUpgradeType.Health: return HealthLevel;
                 case TankUpgradeType.BulletSpeed: return BulletSpeedLevel;
+                case TankUpgradeType.Cooldown: return CooldownLevel;
                 default: return 0;
             }
         }
@@ -188,6 +197,9 @@ namespace Peace_of_Tanks
                 case TankUpgradeType.BulletSpeed:
                     BulletSpeedLevel++;
                     break;
+                case TankUpgradeType.Cooldown:
+                    CooldownLevel++;
+                    break;
             }
         }
     }
@@ -197,7 +209,8 @@ namespace Peace_of_Tanks
         Speed,
         Attack,
         Health,
-        BulletSpeed
+        BulletSpeed,
+        Cooldown
     }
 
     public class PlayerData
@@ -221,6 +234,7 @@ namespace Peace_of_Tanks
                     AttackLevel = 0,
                     HealthLevel = 0,
                     BulletSpeedLevel = 0,
+                    CooldownLevel = 0,
                     CurrentExp = 0,
                     IsUnlocked = type == TankType.Green
                 };
@@ -319,6 +333,12 @@ namespace Peace_of_Tanks
         {
             PlayerTankData tank = Tanks[SelectedTank];
             return TankConfig.GetBulletSpeedMultiplierAtLevel(tank.BulletSpeedLevel);
+        }
+
+        public double GetSelectedTankCooldownSeconds()
+        {
+            PlayerTankData tank = Tanks[SelectedTank];
+            return TankConfig.GetCooldownSecondsAtLevel(tank.CooldownLevel);
         }
     }
 
@@ -521,6 +541,7 @@ namespace Peace_of_Tanks
                     AttackLevel = pair.Value.AttackLevel,
                     HealthLevel = pair.Value.HealthLevel,
                     BulletSpeedLevel = pair.Value.BulletSpeedLevel,
+                    CooldownLevel = pair.Value.CooldownLevel,
                     CurrentExp = pair.Value.CurrentExp,
                     IsUnlocked = pair.Value.IsUnlocked
                 });
@@ -559,6 +580,7 @@ namespace Peace_of_Tanks
                     AttackLevel = ClampUpgradeLevel(tank.AttackLevel),
                     HealthLevel = ClampUpgradeLevel(tank.HealthLevel),
                     BulletSpeedLevel = ClampUpgradeLevel(tank.BulletSpeedLevel),
+                    CooldownLevel = ClampUpgradeLevel(tank.CooldownLevel),
                     CurrentExp = tank.CurrentExp,
                     IsUnlocked = tank.IsUnlocked
                 };

@@ -23,6 +23,8 @@ public partial class UserTank
 
     public int BulletSpeedLevel { get; set; }
 
+    public int CooldownLevel { get; set; }
+
     public int CurrentExp { get; set; }
 
     public bool IsUnlocked { get; set; }
