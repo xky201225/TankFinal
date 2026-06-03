@@ -179,8 +179,8 @@ namespace Peace_of_Tanks
                 (s, e) => ShowMatchPage()));
 
             pageControls.Add(CreateMainButton(
-                "鍗曚汉鎸戞垬",
-                "鍗曚汉闂叧 >>",
+                "单人挑战",
+                "单人闯关 >>",
                 Peace_of_Tanks.Properties.Resources.lobby_icon_solo,
                 new Point(24, 255),
                 false,
@@ -483,7 +483,7 @@ namespace Peace_of_Tanks
             TextBox roomInput = CreateHudTextBox(new Point(22, 60), new Size(260, 28), "ROOM-001");
             panel.Controls.Add(roomInput);
 
-            Button join = CreateSmallButton("鍔犲叆鎴块棿", new Point(304, 58), true);
+            Button join = CreateSmallButton("加入房间", new Point(304, 58), true);
             join.Size = new Size(96, 30);
             join.Click += (s, e) =>
             {
