@@ -13,6 +13,8 @@ namespace Peace_of_Tanks
         public bool Left;
         public bool Right;
         public bool Fire;
+        public bool Skill;
+        public float AimAngleDegrees;
     }
 
     [Serializable]
@@ -21,7 +23,9 @@ namespace Peace_of_Tanks
         public int X;
         public int Y;
         public int Direction;
+        public float RotationDegrees;
         public int HitPoints;
+        public int MaxHitPoints;
         public bool Active;
         public int Kind;
         public int TankType;
@@ -33,7 +37,9 @@ namespace Peace_of_Tanks
         public int X;
         public int Y;
         public int Direction;
+        public float RotationDegrees;
         public int Who;
+        public bool IsBoss;
     }
 
     [Serializable]
@@ -51,6 +57,16 @@ namespace Peace_of_Tanks
         public int Y;
         public int Type;
         public int Delay;
+    }
+
+    [Serializable]
+    internal class DamageTextSnapshot
+    {
+        public int X;
+        public int Y;
+        public int Value;
+        public bool IsPlayerTarget;
+        public int Ticks;
     }
 
     [Serializable]
@@ -74,14 +90,21 @@ namespace Peace_of_Tanks
         public int KillsPlayer1;
         public int KillsPlayer2;
         public int EnemiesLeft;
+        public int SurvivalWave;
+        public int WaveEnemiesLeft;
+        public bool SurvivalBossWave;
+        public bool SurvivalVictory;
+        public int BattleBannerTicks;
         public bool GameOver;
         public string StatusText = string.Empty;
+        public string BattleBannerText = string.Empty;
         public TankSnapshot Player1 = new TankSnapshot();
         public TankSnapshot Player2 = new TankSnapshot();
         public List<TankSnapshot> Enemies = new List<TankSnapshot>();
         public List<BulletSnapshot> Bullets = new List<BulletSnapshot>();
         public List<BoxSnapshot> Boxes = new List<BoxSnapshot>();
         public List<AnimationSnapshot> Animations = new List<AnimationSnapshot>();
+        public List<DamageTextSnapshot> DamageTexts = new List<DamageTextSnapshot>();
         public List<PlayerResultSnapshot> Results = new List<PlayerResultSnapshot>();
     }
 
@@ -101,8 +124,8 @@ namespace Peace_of_Tanks
 
     public enum BattleRuleMode
     {
-        FreeBattle,
-        BaseDefense
+        Versus,
+        Survival
     }
 
     public enum MapTileType
@@ -134,7 +157,7 @@ namespace Peace_of_Tanks
         public NetworkJoinMode JoinMode = NetworkJoinMode.Search;
         public string RoomId = string.Empty;
         public int PlayerCount = 2;
-        public BattleRuleMode BattleRule = BattleRuleMode.FreeBattle;
+        public BattleRuleMode BattleRule = BattleRuleMode.Versus;
         public GameMapConfig MapConfig;
     }
 
@@ -147,7 +170,8 @@ namespace Peace_of_Tanks
         public NetworkDifficulty Difficulty = NetworkDifficulty.Easy;
         public NetworkConfig NetworkConfig;
         public int PlayerCount = 1;
-        public BattleRuleMode BattleRule = BattleRuleMode.FreeBattle;
+        public int StageId = 1;
+        public BattleRuleMode BattleRule = BattleRuleMode.Survival;
         public GameMapConfig MapConfig;
     }
 

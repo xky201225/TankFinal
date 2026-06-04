@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -27,6 +27,7 @@ namespace Peace_of_Tanks
         private int lobbyServerPort = DefaultChatPort;
         private bool lobbyServerPromptShown;
         private bool useAuthenticatedServer;
+        private BattleRuleMode selectedNetworkRule = BattleRuleMode.Versus;
 
         public GameMode SelectedMode { get { return selectedMode; } }
         public TankType SelectedTank { get { return selectedTank; } }
@@ -171,20 +172,20 @@ namespace Peace_of_Tanks
             RefreshTopExp();
 
             pageControls.Add(CreateMainButton(
-                "开始游戏",
-                "匹配对战 >>",
-                Peace_of_Tanks.Properties.Resources.lobby_icon_match,
-                new Point(24, 150),
-                true,
-                (s, e) => ShowMatchPage()));
-
-            pageControls.Add(CreateMainButton(
-                "单人挑战",
+                "单人模式",
                 "单人闯关 >>",
                 Peace_of_Tanks.Properties.Resources.lobby_icon_solo,
+                new Point(24, 150),
+                true,
+                (s, e) => ShowSinglePlayerSetupPage()));
+
+            pageControls.Add(CreateMainButton(
+                "双人联机",
+                "竞技 / 协作 >>",
+                Peace_of_Tanks.Properties.Resources.lobby_icon_match,
                 new Point(24, 255),
                 false,
-                (s, e) => ShowSinglePlayerSetupPage()));
+                (s, e) => ShowMatchPage()));
 
             pageControls.Add(CreateMainButton(
                 "坦克库",
@@ -449,22 +450,52 @@ namespace Peace_of_Tanks
 
             pageControls.Add(new HudHeader
             {
-                Title = "匹配模式",
-                Subtitle = "创建房间、搜索缺人房间，或输入房间号加入",
+                Title = "双人联机",
+                Subtitle = "选择联机竞技或联机协作模式",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
 
-            pageControls.Add(CreatePanelButton("创建房间", "设置服务器、房间号和难度，创建后等待玩家加入。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) => ShowCreateRoomPage()));
+            pageControls.Add(CreatePanelLabel("竞技：双人对战，先达成击杀目标的一方获胜。    协作：双人清怪推进波次，击败最终 Boss 即通关。", new Point(330, 145), 10, Color.FromArgb(205, 220, 235), FontStyle.Regular));
 
-            pageControls.Add(CreatePanelButton("搜索房间", "自动搜索当前服务器里缺人的房间。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
+            pageControls.Add(CreatePanelButton("竞技模式", "双人对战，优先达成击杀目标者获胜。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
             {
-                StartNetworkMatch(NetworkJoinMode.Search, string.Empty, NetworkDifficulty.Easy);
+                selectedNetworkRule = BattleRuleMode.Versus;
+                ShowNetworkRoomPage();
+            }));
+
+            pageControls.Add(CreatePanelButton("协作模式", "双人组队打怪，共同推进波次并击败 Boss。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) =>
+            {
+                selectedNetworkRule = BattleRuleMode.Survival;
+                ShowNetworkRoomPage();
+            }));
+
+            pageControls.Add(CreateBackButton());
+            AddPageControls();
+        }
+
+        private void ShowNetworkRoomPage()
+        {
+            ClearPage();
+
+            bool versusMode = selectedNetworkRule == BattleRuleMode.Versus;
+            pageControls.Add(new HudHeader
+            {
+                Title = versusMode ? "联机竞技" : "联机协作",
+                Subtitle = versusMode ? "创建房间、搜索房间或加入指定房间进行对战" : "创建房间、搜索房间或加入指定房间组队闯关",
+                Size = new Size(650, 74),
+                Location = new Point(330, 82)
+            });
+
+            pageControls.Add(CreatePanelButton("创建房间", "设置服务器、房间号和地图，创建后等待另一名玩家加入。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) => ShowCreateRoomPage()));
+
+            pageControls.Add(CreatePanelButton("搜索房间", "自动搜索当前服务器里可加入的房间。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
+            {
+                StartNetworkMatch(NetworkJoinMode.Search, string.Empty, versusMode ? NetworkDifficulty.Easy : NetworkDifficulty.Medium);
             }));
 
             pageControls.Add(CreateJoinRoomPanel());
-
-            pageControls.Add(CreateBackButton());
+            pageControls.Add(CreateBackButton((s, e) => ShowMatchPage()));
             AddPageControls();
         }
 
@@ -509,8 +540,8 @@ namespace Peace_of_Tanks
 
             pageControls.Add(new HudHeader
             {
-                Title = "创建房间",
-                Subtitle = "设置房间信息后直接进入等待页面",
+                Title = selectedNetworkRule == BattleRuleMode.Versus ? "创建竞技房间" : "创建协作房间",
+                Subtitle = selectedNetworkRule == BattleRuleMode.Versus ? "设置房间信息后等待另一名玩家加入对战" : "设置房间信息后等待另一名玩家加入协作",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
@@ -521,10 +552,8 @@ namespace Peace_of_Tanks
             TextBox name = AddField(panel, "玩家名称", chatPlayerName, 24, 92);
             TextBox roomId = AddField(panel, "房间号", "ROOM-" + DateTime.Now.ToString("HHmm"), 230, 92);
 
-            ComboBox playerCount = AddCombo(panel, "匹配人数", new object[] { "双人模式", "三人模式" }, 24, 164);
-            ComboBox battleRule = AddCombo(panel, "对抗模式", new object[] { "自由战场", "阵地防守" }, 230, 164);
-            ComboBox difficulty = AddCombo(panel, "难度", new object[] { "简单", "中等", "困难" }, 24, 236);
-            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(true), 230, 236);
+            ComboBox difficulty = AddCombo(panel, "难度", new object[] { "简单", "中等", "困难" }, 24, 164);
+            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(true), 230, 164);
 
             GameMapConfig[] systemMaps = CreateSystemMaps();
             GameMapConfig customMap = BattleMapFactory.CreateEmpty("自定义地图");
@@ -534,7 +563,7 @@ namespace Peace_of_Tanks
                 Size = new Size(420, 420),
                 Location = new Point(735, 160),
                 BackColor = Color.FromArgb(14, 24, 36),
-                Map = CreatePreviewMap(systemMaps[0], false),
+                Map = CreatePreviewMap(systemMaps[0], selectedNetworkRule == BattleRuleMode.Survival),
                 Editable = false,
                 SelectedTile = MapTileType.Wall
             };
@@ -560,16 +589,8 @@ namespace Peace_of_Tanks
             {
                 bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
                 int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], battleRule.SelectedIndex == 1);
+                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], selectedNetworkRule == BattleRuleMode.Survival);
                 mapPreview.Editable = custom;
-                mapPreview.Invalidate();
-            };
-
-            battleRule.SelectedIndexChanged += (s, e) =>
-            {
-                bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
-                int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], battleRule.SelectedIndex == 1);
                 mapPreview.Invalidate();
             };
 
@@ -591,29 +612,30 @@ namespace Peace_of_Tanks
                     host.Text.Trim(),
                     parsedPort,
                     name.Text.Trim(),
-                    playerCount.SelectedIndex == 1 ? 3 : 2,
-                    battleRule.SelectedIndex == 1 ? BattleRuleMode.BaseDefense : BattleRuleMode.FreeBattle,
+                    2,
+                    selectedNetworkRule,
                     mapPreview.Map);
             };
             panel.Controls.Add(create);
 
-            Label hint = CreatePanelLabel("自由战场：先达到 15 击杀获胜\n阵地防守：阵地被毁则淘汰", new Point(24, 390), 9, Color.FromArgb(180, 195, 210), FontStyle.Regular);
+            Label hint = CreatePanelLabel(
+                selectedNetworkRule == BattleRuleMode.Versus
+                    ? "竞技模式：双人对战，先达到击杀目标或时间结束比分更高者获胜"
+                    : "协作模式：双人组队清怪，推进波次并击败最终 Boss",
+                new Point(24, 390),
+                9,
+                Color.FromArgb(180, 195, 210),
+                FontStyle.Regular);
             panel.Controls.Add(hint);
 
             pageControls.Add(panel);
-            pageControls.Add(CreateBackButton());
+            pageControls.Add(CreateBackButton((s, e) => ShowNetworkRoomPage()));
             AddPageControls();
         }
 
         private static GameMapConfig CreatePreviewMap(GameMapConfig map, bool baseDefense)
         {
-            GameMapConfig preview = BattleMapFactory.CloneMap(map);
-            if (baseDefense)
-            {
-                BattleMapFactory.AddBaseDefenseTiles(preview);
-            }
-
-            return preview;
+            return BattleMapFactory.CloneMap(map);
         }
 
         private void ShowSinglePlayerSetupPage()
@@ -624,46 +646,65 @@ namespace Peace_of_Tanks
             pageControls.Add(new HudHeader
             {
                 Title = "单人挑战",
-                Subtitle = "先选择战场地图，再选择挑战难度",
+                Subtitle = "三个关卡逐步解锁，通关前一关后开启下一关",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
 
-            HudPanel panel = new HudPanel { Size = new Size(420, 330), Location = new Point(285, 180), BackColor = Color.FromArgb(14, 24, 36) };
-            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(false), 24, 32);
-            ComboBox difficulty = AddCombo(panel, "模式", new object[] { "简单", "中等", "困难" }, 230, 32);
-
-            Label hint = CreatePanelLabel("简单：场上保持 3 辆敌方坦克\n中等：场上保持 5 辆敌方坦克\n困难：场上保持 8 辆敌方坦克", new Point(24, 112), 10, Color.FromArgb(190, 205, 225), FontStyle.Regular);
-            panel.Controls.Add(hint);
-
-            GameMapConfig[] systemMaps = CreateSystemMaps();
+            int selectedStage = 1;
+            GameMapConfig selectedMap = BattleMapFactory.CreateStageMap(selectedStage);
             MapEditorControl mapPreview = new MapEditorControl
             {
                 Size = new Size(420, 420),
                 Location = new Point(735, 160),
                 BackColor = Color.FromArgb(14, 24, 36),
-                Map = systemMaps[0],
+                Map = selectedMap,
                 Editable = false,
                 SelectedTile = MapTileType.Wall
             };
 
-            Label previewTitle = CreatePanelLabel("地图预览", new Point(735, 132), 12, Color.White, FontStyle.Bold);
+            Label previewTitle = CreatePanelLabel("关卡预览", new Point(735, 132), 12, Color.White, FontStyle.Bold);
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
-            mapSelect.SelectedIndexChanged += (s, e) =>
+            HudPanel panel = new HudPanel { Size = new Size(420, 360), Location = new Point(285, 180), BackColor = Color.FromArgb(14, 24, 36) };
+            Label title = CreatePanelLabel("选择关卡", new Point(24, 28), 14, Color.White, FontStyle.Bold);
+            panel.Controls.Add(title);
+
+            Action<int> refreshStageInfo = stageId =>
             {
-                int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                mapPreview.Map = systemMaps[selectedIndex];
+                selectedStage = stageId;
+                selectedMap = BattleMapFactory.CreateStageMap(stageId);
+                mapPreview.Map = selectedMap;
                 mapPreview.Invalidate();
             };
 
-            Button start = CreateSmallButton("开始挑战", new Point(24, 240), true);
+            for (int stage = 1; stage <= 3; stage++)
+            {
+                bool unlocked = playerData.IsStageUnlocked(stage);
+                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关") : ("第" + stage + "关 未解锁"), new Point(24, 72 + (stage - 1) * 64), unlocked);
+                stageButton.Size = new Size(180, 42);
+                int capturedStage = stage;
+                stageButton.Click += (s, e) => refreshStageInfo(capturedStage);
+                panel.Controls.Add(stageButton);
+
+                string desc = capturedStage == 1 ? "废墟前线：适合起步熟悉走位与清怪。" : capturedStage == 2 ? "钢铁水坝：障碍更多，侧翼压力更强。" : "要塞核心：核心战场，Boss压制最强。";
+                panel.Controls.Add(CreatePanelLabel(desc, new Point(220, 82 + (capturedStage - 1) * 64), 9, unlocked ? Color.FromArgb(200, 215, 230) : Color.FromArgb(120, 130, 145), FontStyle.Regular));
+            }
+
+            panel.Controls.Add(CreatePanelLabel("规则：通关当前关卡后解锁下一关，也可反复挑战已通关关卡。", new Point(24, 276), 9, Color.FromArgb(190, 205, 225), FontStyle.Regular));
+
+            Button start = CreateSmallButton("开始挑战", new Point(24, 310), true);
             start.Size = new Size(128, 34);
             start.Click += (s, e) =>
             {
-                int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                StartSinglePlayer(systemMaps[selectedIndex], (NetworkDifficulty)difficulty.SelectedIndex);
+                if (!playerData.IsStageUnlocked(selectedStage))
+                {
+                    MessageBox.Show(this, "请先通关前一关。", "关卡未解锁", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                StartSinglePlayer(selectedMap, (NetworkDifficulty)Math.Max(0, selectedStage - 1), selectedStage);
             };
             panel.Controls.Add(start);
 
@@ -836,6 +877,11 @@ namespace Peace_of_Tanks
 
         private Control CreateBackButton()
         {
+            return CreateBackButton((s, e) => ShowHomePage());
+        }
+
+        private Control CreateBackButton(EventHandler click)
+        {
             HudMainButton button = new HudMainButton
             {
                 Title = "返回大厅",
@@ -845,7 +891,7 @@ namespace Peace_of_Tanks
                 Size = new Size(210, 72),
                 Location = new Point(28, 570)
             };
-            button.Click += (s, e) => ShowHomePage();
+            button.Click += click;
             return button;
         }
 
@@ -860,10 +906,15 @@ namespace Peace_of_Tanks
 
         private void RefreshTopExp()
         {
-            expLabel.Text = "经验值 " + playerData.TotalExp;
+            expLabel.Text = "金币 " + playerData.TotalExp;
         }
 
         private void StartSinglePlayer(GameMapConfig mapConfig, NetworkDifficulty difficulty)
+        {
+            StartSinglePlayer(mapConfig, difficulty, 1);
+        }
+
+        private void StartSinglePlayer(GameMapConfig mapConfig, NetworkDifficulty difficulty, int stageId)
         {
             selectedMode = GameMode.SinglePlayer;
             launchOptions = new GameLaunchOptions
@@ -873,7 +924,8 @@ namespace Peace_of_Tanks
                 StartImmediately = true,
                 UseNetwork = false,
                 Difficulty = difficulty,
-                BattleRule = BattleRuleMode.BaseDefense,
+                StageId = stageId,
+                BattleRule = BattleRuleMode.Survival,
                 MapConfig = mapConfig
             };
             DialogResult = DialogResult.OK;
@@ -882,7 +934,7 @@ namespace Peace_of_Tanks
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty)
         {
-            StartNetworkMatch(joinMode, roomId, difficulty, lobbyServerHost, lobbyServerPort, chatPlayerName, 2, BattleRuleMode.FreeBattle, BattleMapFactory.CreateSystemMap(0));
+            StartNetworkMatch(joinMode, roomId, difficulty, lobbyServerHost, lobbyServerPort, chatPlayerName, 2, selectedNetworkRule, BattleMapFactory.CreateSystemMap(0));
         }
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty, string host, int port, string playerName, int playerCount, BattleRuleMode battleRule, GameMapConfig mapConfig)
@@ -892,7 +944,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            selectedMode = playerCount == 3 ? GameMode.ThreePlayer : GameMode.TwoPlayer;
+            selectedMode = battleRule == BattleRuleMode.Versus ? GameMode.NetworkVersus : GameMode.NetworkCoop;
             launchOptions = new GameLaunchOptions
             {
                 Mode = selectedMode,
@@ -1417,9 +1469,11 @@ namespace Peace_of_Tanks
                         int attack = TankConfig.GetAttackAtLevel(TankData.AttackLevel);
                         int health = TankConfig.GetHealthAtLevel(TankData.HealthLevel);
                         double cooldown = TankConfig.GetCooldownSecondsAtLevel(TankData.CooldownLevel);
+                        TankSkillType skillType = TankSkillCatalog.GetSkillType(TankType);
+                        string skillName = TankSkillCatalog.GetDisplayName(skillType);
                         stats = TankData.IsUnlocked
-                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\nCD " + cooldown.ToString("0.0") + "s Lv" + TankData.CooldownLevel + "/5"
-                            : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n解锁 " + TankConfig.UnlockExp;
+                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\n技能 " + skillName + "  CD " + TankSkillCatalog.GetCooldownSeconds(skillType).ToString("0") + "s"
+                            : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n技能 " + skillName + "\n解锁 " + TankConfig.UnlockExp;
                     }
 
                     e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 50, 124, 76));

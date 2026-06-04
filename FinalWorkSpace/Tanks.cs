@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,13 +10,13 @@ namespace Peace_of_Tanks
 {
     public class TankEventArgs : EventArgs
     {
-        public bool isUp, isDown, isLeft, isRight, isSpace;
+        public bool isUp, isDown, isLeft, isRight, isSpace, isSkill;
         public int pauseSpace = 0;
         public TankEventArgs() : base() { }
 
         public void clear()
         {
-            isUp = isDown = isLeft = isRight = isSpace = false;
+            isUp = isDown = isLeft = isRight = isSpace = isSkill = false;
         }
     }
 
@@ -25,6 +25,11 @@ namespace Peace_of_Tanks
         public int pauseSpace = GameTiming.ScaleLegacyTicks(50);
         public int pauseTurn = GameTiming.ScaleLegacyTicks(100);
         public int goToPlayer;
+        public float patrolAngleDegrees;
+        public int aggressionLevel = 1;
+        public int aggroRange = 260;
+        public int attackRange = 220;
+        public bool isBoss;
         public static int player1X, player1Y, player2X, player2Y;
         public static int players; // 0 - no, 1 - 1 player, 2 - 2 player, 3 - both
 
@@ -38,13 +43,19 @@ namespace Peace_of_Tanks
     {
         protected static readonly double BaseMoveSpeed = GameTiming.ScaleDistance(1.5);
         protected const int TankSize = 50;
+        private static readonly Dictionary<int, SolidBrush[]> GlowBrushCache = new Dictionary<int, SolidBrush[]>();
         protected Bitmap pictureTank, pictureTank1, pictureTank2;
+        private readonly Bitmap[] directionalPictureTank1 = new Bitmap[4];
+        private readonly Bitmap[] directionalPictureTank2 = new Bitmap[4];
+        private bool useFreeRotation;
+        private float rotationDegrees;
         protected bool changePicture;
         public Bitmap pictureBullet;
         public int hitpoints = 1;
         public int maxHitpoints = 1;  // 最大生命值
         public int attack = 10;        // 攻击力
         public TankType TankType = TankType.Green;
+        public bool IsBossEntity;
         public double speedMultiplier = 1.0;
         public double bulletSpeedMultiplier = 1.0;
         public double cooldownSeconds = 3.0;
@@ -62,19 +73,20 @@ namespace Peace_of_Tanks
             set { preciseY = value; }
         }
 
+        public float RotationDegrees
+        {
+            get { return rotationDegrees; }
+        }
+
         public BaseTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction)
         {
-            pictureTank1.MakeTransparent(Color.Black);
-            pictureTank2.MakeTransparent(Color.Black);
             pictureBullet.MakeTransparent(Color.Black);
             this.pictureBullet = pictureBullet;
-            this.pictureTank1 = pictureTank1;
-            this.pictureTank2 = pictureTank2;
-            pictureTank = pictureTank1;
+            InitializeDirectionalImages(pictureTank1, pictureTank2);
             changePicture = false;
             preciseX = x;
             preciseY = y;
-            this.direction = direction;
+            SetDirection(direction);
         }
 
         // 带攻击力和生命力的构造函数
@@ -88,30 +100,62 @@ namespace Peace_of_Tanks
 
         public void SetImages(Bitmap pictureTank1, Bitmap pictureTank2)
         {
-            pictureTank1.MakeTransparent(Color.Black);
-            pictureTank2.MakeTransparent(Color.Black);
-            this.pictureTank1 = pictureTank1;
-            this.pictureTank2 = pictureTank2;
+            InitializeDirectionalImages(pictureTank1, pictureTank2);
+            SetDirection(direction);
+        }
+
+        private void InitializeDirectionalImages(Bitmap basePictureTank1, Bitmap basePictureTank2)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                directionalPictureTank1[i]?.Dispose();
+                directionalPictureTank2[i]?.Dispose();
+                directionalPictureTank1[i] = CreateDirectionalBitmap(basePictureTank1, i);
+                directionalPictureTank2[i] = CreateDirectionalBitmap(basePictureTank2, i);
+            }
+        }
+
+        private static Bitmap CreateDirectionalBitmap(Bitmap source, int targetDirection)
+        {
+            Bitmap rotated = new Bitmap(source);
+            rotated.MakeTransparent(Color.Black);
+
+            switch (targetDirection)
+            {
+                case 0:
+                    rotated.RotateFlip(RotateFlipType.Rotate90FlipX);
+                    break;
+                case 1:
+                    rotated.RotateFlip(RotateFlipType.Rotate90FlipNone);
+                    break;
+                case 3:
+                    rotated.RotateFlip(RotateFlipType.Rotate180FlipNone);
+                    break;
+            }
+
+            return rotated;
+        }
+
+        protected void SetDirection(int newDirection)
+        {
+            direction = newDirection;
+            rotationDegrees = DirectionToRotationDegrees(newDirection);
+            pictureTank1 = directionalPictureTank1[newDirection];
+            pictureTank2 = directionalPictureTank2[newDirection];
             pictureTank = changePicture ? pictureTank2 : pictureTank1;
         }
 
-        public void RotatePicture(Bitmap pictureTank, int direct, bool isUp, bool isDown, bool isLeft, bool isRight)
+        protected void EnableFreeRotation()
         {
-            if (isLeft && direct == 2) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipX);
-            if (isLeft && direct == 1) pictureTank.RotateFlip(RotateFlipType.Rotate180FlipNone);
-            if (isLeft && direct == 3) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipNone);
+            useFreeRotation = true;
+            pictureTank1 = directionalPictureTank1[2];
+            pictureTank2 = directionalPictureTank2[2];
+            pictureTank = changePicture ? pictureTank2 : pictureTank1;
+        }
 
-            if (isUp && direct == 3) pictureTank.RotateFlip(RotateFlipType.Rotate180FlipNone);
-            if (isUp && direct == 0) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipNone);
-            if (isUp && direct == 1) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipY);
-
-            if (isRight && direct == 3) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipX);
-            if (isRight && direct == 0) pictureTank.RotateFlip(RotateFlipType.Rotate180FlipNone);
-            if (isRight && direct == 2) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipNone);
-
-            if (isDown && direct == 0) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipY);
-            if (isDown && direct == 1) pictureTank.RotateFlip(RotateFlipType.Rotate90FlipNone);
-            if (isDown && direct == 2) pictureTank.RotateFlip(RotateFlipType.Rotate180FlipNone);
+        public void SetRotationDegrees(float angleDegrees)
+        {
+            rotationDegrees = NormalizeAngle(angleDegrees);
         }
 
         protected void changePictureFun()
@@ -128,6 +172,11 @@ namespace Peace_of_Tanks
             }
         }
 
+        public Bitmap CurrentPicture
+        {
+            get { return pictureTank; }
+        }
+
         public void Draw(Graphics grMemory)
         {
             Draw(grMemory, Color.Empty);
@@ -136,6 +185,12 @@ namespace Peace_of_Tanks
         public void Draw(Graphics grMemory, Color glowColor)
         {
             DrawGlow(grMemory, x, y, TankSize, TankSize, glowColor);
+            if (useFreeRotation)
+            {
+                DrawRotated(grMemory, pictureTank, x, y, TankSize, TankSize, rotationDegrees);
+                return;
+            }
+
             grMemory.DrawImage(pictureTank, x, y, TankSize, TankSize);
         }
 
@@ -148,19 +203,16 @@ namespace Peace_of_Tanks
 
             int centerX = x + width / 2;
             int centerY = y + height / 2;
+            SolidBrush[] brushes = GetGlowBrushes(glowColor);
             for (int i = 0; i < 4; i++)
             {
                 int expand = 16 - i * 4;
-                int alpha = 34 + i * 18;
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(alpha, glowColor)))
-                {
-                    graphics.FillEllipse(
-                        brush,
-                        centerX - width / 2 - expand,
-                        centerY - height / 2 - expand,
-                        width + expand * 2,
-                        height + expand * 2);
-                }
+                graphics.FillEllipse(
+                    brushes[i],
+                    centerX - width / 2 - expand,
+                    centerY - height / 2 - expand,
+                    width + expand * 2,
+                    height + expand * 2);
             }
         }
 
@@ -182,502 +234,691 @@ namespace Peace_of_Tanks
         {
             return BaseMoveSpeed * Math.Max(0.1, speedMultiplier);
         }
+
+        protected static float NormalizeAngle(float angleDegrees)
+        {
+            angleDegrees %= 360f;
+            if (angleDegrees < 0f)
+            {
+                angleDegrees += 360f;
+            }
+
+            return angleDegrees;
+        }
+
+        protected static float DirectionToRotationDegrees(int direction)
+        {
+            switch (direction)
+            {
+                case 0: return 270f;
+                case 1: return 90f;
+                case 3: return 180f;
+                default: return 0f;
+            }
+        }
+
+        protected static float VectorToRotationDegrees(double moveX, double moveY)
+        {
+            if (Math.Abs(moveX) < double.Epsilon && Math.Abs(moveY) < double.Epsilon)
+            {
+                return 0f;
+            }
+
+            return NormalizeAngle((float)(Math.Atan2(moveY, moveX) * 180.0 / Math.PI + 90.0));
+        }
+
+        protected static void DrawRotated(Graphics graphics, Bitmap source, int x, int y, int width, int height, float angleDegrees)
+        {
+            var state = graphics.Save();
+            graphics.TranslateTransform(x + width / 2f, y + height / 2f);
+            graphics.RotateTransform(angleDegrees);
+            graphics.DrawImage(source, -width / 2f, -height / 2f, width, height);
+            graphics.Restore(state);
+        }
+
+        private static SolidBrush[] GetGlowBrushes(Color glowColor)
+        {
+            int key = glowColor.ToArgb();
+            if (GlowBrushCache.TryGetValue(key, out SolidBrush[] brushes))
+            {
+                return brushes;
+            }
+
+            brushes = new SolidBrush[4];
+            for (int i = 0; i < brushes.Length; i++)
+            {
+                int alpha = 34 + i * 18;
+                brushes[i] = new SolidBrush(Color.FromArgb(alpha, glowColor));
+            }
+
+            GlowBrushCache[key] = brushes;
+            return brushes;
+        }
     }
 
     class PlayerTank : BaseTank
     {
+        private const double CollisionProbeStep = 1.0;
+        private const double DashDistance = 90.0;
+        private const double DashProbeStep = 10.0;
         public TankEventArgs message;
+        public bool UseMouseAim { get; set; }
+        public TankSkillType SkillType { get; private set; }
+        public double SkillCooldownSeconds { get; private set; }
+        public DateTime nextSkillAvailableAtUtc = DateTime.MinValue;
+        private DateTime overdriveEndsAtUtc = DateTime.MinValue;
+        private DateTime shieldEndsAtUtc = DateTime.MinValue;
+        private DateTime lifestealEndsAtUtc = DateTime.MinValue;
+        private int shieldPoints;
+        private int barrageShotsRemaining;
+
         public PlayerTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
         {
             message = new TankEventArgs();
+            EnableFreeRotation();
         }
 
         public PlayerTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction, int health, int attack)
             : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction, health, attack)
         {
             message = new TankEventArgs();
+            EnableFreeRotation();
+        }
+
+        public void ConfigureSkill(TankType tankType)
+        {
+            SkillType = TankSkillCatalog.GetSkillType(tankType);
+            SkillCooldownSeconds = TankSkillCatalog.GetCooldownSeconds(SkillType);
+            ResetSkillState();
+        }
+
+        public void ResetSkillState()
+        {
+            nextSkillAvailableAtUtc = DateTime.MinValue;
+            overdriveEndsAtUtc = DateTime.MinValue;
+            shieldEndsAtUtc = DateTime.MinValue;
+            lifestealEndsAtUtc = DateTime.MinValue;
+            shieldPoints = 0;
+            barrageShotsRemaining = 0;
+        }
+
+        public int ShieldPoints
+        {
+            get
+            {
+                ExpireTimedEffects();
+                return shieldPoints;
+            }
+        }
+
+        public int BarrageShotsRemaining
+        {
+            get
+            {
+                return barrageShotsRemaining;
+            }
+        }
+
+        public bool IsOverdriveActive
+        {
+            get
+            {
+                return DateTime.UtcNow < overdriveEndsAtUtc;
+            }
+        }
+
+        public bool IsLifestealActive
+        {
+            get
+            {
+                return DateTime.UtcNow < lifestealEndsAtUtc;
+            }
+        }
+
+        public bool IsSkillReady
+        {
+            get
+            {
+                return DateTime.UtcNow >= nextSkillAvailableAtUtc;
+            }
+        }
+
+        public double GetRemainingSkillCooldownSeconds()
+        {
+            double seconds = (nextSkillAvailableAtUtc - DateTime.UtcNow).TotalSeconds;
+            return Math.Max(0, seconds);
+        }
+
+        public void ExpireTimedEffects()
+        {
+            DateTime now = DateTime.UtcNow;
+            if (shieldPoints > 0 && now >= shieldEndsAtUtc)
+            {
+                shieldPoints = 0;
+            }
+        }
+
+        public int GetCurrentAttack()
+        {
+            return IsOverdriveActive ? (int)Math.Round(attack * 1.6) : attack;
+        }
+
+        public double GetCurrentCooldownSeconds()
+        {
+            return IsOverdriveActive ? Math.Max(0.2, cooldownSeconds * 0.55) : cooldownSeconds;
+        }
+
+        public bool ConsumeBarrageShot()
+        {
+            if (barrageShotsRemaining <= 0)
+            {
+                return false;
+            }
+
+            barrageShotsRemaining--;
+            return true;
+        }
+
+        public int AbsorbDamage(int damage)
+        {
+            ExpireTimedEffects();
+            if (shieldPoints <= 0 || damage <= 0)
+            {
+                return damage;
+            }
+
+            int absorbed = Math.Min(shieldPoints, damage);
+            shieldPoints -= absorbed;
+            return damage - absorbed;
+        }
+
+        public int ApplyLifesteal(int damage)
+        {
+            if (!IsLifestealActive || damage <= 0)
+            {
+                return 0;
+            }
+
+            int heal = Math.Max(1, (int)Math.Round(damage * 0.35));
+            int before = hitpoints;
+            hitpoints = Math.Min(maxHitpoints, hitpoints + heal);
+            return Math.Max(0, hitpoints - before);
+        }
+
+        public bool TryActivateSkill(Form mainWindow, List<Box> boxes, List<BaseTank> tanks)
+        {
+            DateTime now = DateTime.UtcNow;
+            if (now < nextSkillAvailableAtUtc)
+            {
+                return false;
+            }
+
+            bool activated;
+            switch (SkillType)
+            {
+                case TankSkillType.Dash:
+                    activated = TryDash(mainWindow, boxes, tanks);
+                    break;
+                case TankSkillType.Barrage:
+                    barrageShotsRemaining = Math.Max(barrageShotsRemaining, 3);
+                    activated = true;
+                    break;
+                case TankSkillType.Overdrive:
+                    overdriveEndsAtUtc = now.AddSeconds(5);
+                    activated = true;
+                    break;
+                case TankSkillType.Lifesteal:
+                    lifestealEndsAtUtc = now.AddSeconds(8);
+                    activated = true;
+                    break;
+                default:
+                    hitpoints = Math.Min(maxHitpoints, hitpoints + Math.Max(18, maxHitpoints / 3));
+                    activated = true;
+                    break;
+            }
+
+            if (activated)
+            {
+                nextSkillAvailableAtUtc = now.AddSeconds(SkillCooldownSeconds);
+            }
+
+            return activated;
         }
 
         public void Move(Form MainWindow, KeyEventArgs e, TankEventArgs message, List<Box> boxes, List<BaseTank> tanks)
         {
-            int difference = 2;
-            if (message.isLeft)
+            Move(MainWindow, e, message, boxes, tanks, 1);
+        }
+
+        public void Move(Form MainWindow, KeyEventArgs e, TankEventArgs message, List<Box> boxes, List<BaseTank> tanks, int movementStepCount)
+        {
+            double moveX = 0;
+            double moveY = 0;
+
+            if (message.isLeft) moveX -= 1;
+            if (message.isRight) moveX += 1;
+            if (message.isUp) moveY -= 1;
+            if (message.isDown) moveY += 1;
+
+            if (Math.Abs(moveX) < double.Epsilon && Math.Abs(moveY) < double.Epsilon)
             {
-                RotatePicture(pictureTank1, direction, false, false, true, false);
-                RotatePicture(pictureTank2, direction, false, false, true, false);
-                direction = 0;
-                if (!IsInsideBattlefield(MainWindow, x - difference, y))
+                return;
+            }
+
+            double length = Math.Sqrt(moveX * moveX + moveY * moveY);
+            moveX /= length;
+            moveY /= length;
+
+            if (!UseMouseAim)
+            {
+                SetRotationDegrees(VectorToRotationDegrees(moveX, moveY));
+            }
+
+            double totalDistance = GetMoveSpeed() * Math.Max(1, movementStepCount);
+            int probeCount = Math.Max(1, (int)Math.Ceiling(totalDistance / CollisionProbeStep));
+            double startX = preciseX;
+            double startY = preciseY;
+
+            for (int probe = 1; probe <= probeCount; probe++)
+            {
+                double probeDistance = totalDistance * probe / probeCount;
+                int nextX = (int)Math.Round(startX + moveX * probeDistance);
+                int nextY = (int)Math.Round(startY + moveY * probeDistance);
+
+                if (!CanMoveTo(MainWindow, boxes, tanks, nextX, nextY))
                 {
                     return;
                 }
-
-                for (int i = 0; i < boxes.Count; i++)
-                {
-                    if (Collisions.check_touch(x - difference, y, boxes[i], MainWindow))
-                    {
-                        return;
-                    }
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)         //находит номер танка в массиве
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for(int i = 0; i < tanks.Count; i++) //проверка столкновения с другими танками
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x - difference, y, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseX -= GetMoveSpeed();
-
-                changePictureFun();
             }
-            else if (message.isUp)
+
+            preciseX = startX + moveX * totalDistance;
+            preciseY = startY + moveY * totalDistance;
+            changePictureFun();
+        }
+
+        private bool CanMoveTo(Form MainWindow, List<Box> boxes, List<BaseTank> tanks, int nextX, int nextY)
+        {
+            if (!IsInsideBattlefield(MainWindow, nextX, nextY))
             {
-                RotatePicture(pictureTank1, direction, true, false, false, false);
-                RotatePicture(pictureTank2, direction, true, false, false, false);
-                direction = 2;
-                if (!IsInsideBattlefield(MainWindow, x, y - difference))
-                {
-                    return;
-                }
-
-                for (int i = 0; i < boxes.Count; i++)
-                {
-                    if (Collisions.check_touch(x, y - difference, boxes[i], MainWindow))
-                    {
-                        return;
-                    }
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x, y - difference, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseY -= GetMoveSpeed();
-
-                changePictureFun();
+                return false;
             }
-            else if (message.isRight)
+
+            for (int i = 0; i < boxes.Count; i++)
             {
-                RotatePicture(pictureTank1, direction, false, false, false, true);
-                RotatePicture(pictureTank2, direction, false, false, false, true);
-                direction = 1;
-                if (!IsInsideBattlefield(MainWindow, x + difference, y))
+                if (Collisions.check_touch(nextX, nextY, boxes[i], MainWindow))
                 {
-                    return;
+                    return false;
                 }
-
-                for (int i = 0; i < boxes.Count; i++)
-                {
-                    if (Collisions.check_touch(x + difference, y, boxes[i], MainWindow))
-                    {
-                        return;
-                    }
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x + difference, y , tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseX += GetMoveSpeed();
-
-                changePictureFun();
             }
-            else if (message.isDown)
+
+            int currentIndex = -1;
+            for (int i = 0; i < tanks.Count; i++)
             {
-                RotatePicture(pictureTank1, direction, false, true, false, false);
-                RotatePicture(pictureTank2, direction, false, true, false, false);
-                direction = 3;
-                if (!IsInsideBattlefield(MainWindow, x, y + difference))
+                if (ReferenceEquals(tanks[i], this))
                 {
-                    return;
+                    currentIndex = i;
+                    break;
                 }
-
-                for (int i = 0; i < boxes.Count; i++)
-                {
-                    if (Collisions.check_touch(x, y + difference, boxes[i], MainWindow))
-                    {
-                        return;
-                    }
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x , y + difference, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseY += GetMoveSpeed();
-
-                changePictureFun();
             }
+
+            for (int i = 0; i < tanks.Count; i++)
+            {
+                if (i == currentIndex)
+                {
+                    continue;
+                }
+
+                if (Collisions.check_touch(nextX, nextY, tanks[i].x, tanks[i].y))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TryDash(Form mainWindow, List<Box> boxes, List<BaseTank> tanks)
+        {
+            double radians = (RotationDegrees - 90.0) * Math.PI / 180.0;
+            double moveX = Math.Cos(radians);
+            double moveY = Math.Sin(radians);
+            if (Math.Abs(moveX) < double.Epsilon && Math.Abs(moveY) < double.Epsilon)
+            {
+                return false;
+            }
+
+            double startX = preciseX;
+            double startY = preciseY;
+            int probeCount = Math.Max(1, (int)Math.Ceiling(DashDistance / DashProbeStep));
+            double safeDistance = 0;
+            for (int probe = 1; probe <= probeCount; probe++)
+            {
+                double probeDistance = DashDistance * probe / probeCount;
+                int nextX = (int)Math.Round(startX + moveX * probeDistance);
+                int nextY = (int)Math.Round(startY + moveY * probeDistance);
+                if (!CanMoveTo(mainWindow, boxes, tanks, nextX, nextY))
+                {
+                    break;
+                }
+
+                safeDistance = probeDistance;
+            }
+
+            if (safeDistance <= 0)
+            {
+                return false;
+            }
+
+            preciseX = startX + moveX * safeDistance;
+            preciseY = startY + moveY * safeDistance;
+            changePictureFun();
+            return true;
         }
     }
 
     class EnemyTank : BaseTank
     {
         private const double EnemyFireIntervalSeconds = 1.0;
-        Random ranNumber = new Random();
+        private static readonly Random ranNumber = new Random();
 
-        int difference = 1;
         int goToPlayer;
 
         public EnemyEventArgs message;
 
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
         {
+            EnableFreeRotation();
             message = new EnemyEventArgs();
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             goToPlayer = ranNumber.Next(1, 3);
+            message.patrolAngleDegrees = ranNumber.Next(0, 360);
         }
 
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction, int health, int attack)
             : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction, health, attack)
         {
+            EnableFreeRotation();
             message = new EnemyEventArgs();
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             goToPlayer = ranNumber.Next(1, 3);
+            message.patrolAngleDegrees = ranNumber.Next(0, 360);
         }
 
-        int DirectPlayersAttached(bool [] nums) // nums содержит направления куда можно двигаться
+        private bool TryGetTargetPosition(out int targetX, out int targetY, out double distance)
         {
-            bool[] numsBuf = new bool[4] { false, false, false, false };
+            targetX = x;
+            targetY = y;
+            distance = double.MaxValue;
 
-            if (EnemyEventArgs.players == 1)
+            if (EnemyEventArgs.players == 0)
             {
-                if (x < EnemyEventArgs.player1X && nums[1] == false)
-                    numsBuf[1] = true;
-                else if (x > EnemyEventArgs.player1X && nums[0] == false)
-                    numsBuf[0] = true;
-                if (y > EnemyEventArgs.player1Y && nums[2] == false)
-                    numsBuf[2] = true;
-                else if (y < EnemyEventArgs.player1Y && nums[3] == false)
-                    numsBuf[3] = true;
+                return false;
             }
 
-            else if (EnemyEventArgs.players == 2 )
+            if (EnemyEventArgs.players == 1 || (EnemyEventArgs.players == 3 && message.goToPlayer == 1))
             {
-                if (x < EnemyEventArgs.player2X && nums[1] == false)
-                    numsBuf[1] = true;
-                else if (x > EnemyEventArgs.player2X && nums[0] == false)
-                    numsBuf[0] = true;
-                if (y > EnemyEventArgs.player2Y && nums[2] == false)
-                    numsBuf[2] = true;
-                else if (y < EnemyEventArgs.player2Y && nums[3] == false)
-                    numsBuf[3] = true;
+                targetX = EnemyEventArgs.player1X;
+                targetY = EnemyEventArgs.player1Y;
             }
-            else if (EnemyEventArgs.players == 3)
+            else if (EnemyEventArgs.players == 2 || (EnemyEventArgs.players == 3 && message.goToPlayer == 2))
             {
-                if(message.goToPlayer == 1)
-                {
-                    if (x < EnemyEventArgs.player1X && nums[1] == false)
-                        numsBuf[1] = true;
-                    else if (x > EnemyEventArgs.player1X && nums[0] == false)
-                        numsBuf[0] = true;
-                    if (y > EnemyEventArgs.player1Y && nums[2] == false)
-                        numsBuf[2] = true;
-                    else if (y < EnemyEventArgs.player1Y && nums[3] == false)
-                        numsBuf[3] = true;
-                }
-                else if(message.goToPlayer == 2)
-                {
-                    if (x < EnemyEventArgs.player2X && nums[1] == false)
-                        numsBuf[1] = true;
-                    else if (x > EnemyEventArgs.player2X && nums[0] == false)
-                        numsBuf[0] = true;
-                    if (y > EnemyEventArgs.player2Y && nums[2] == false)
-                        numsBuf[2] = true;
-                    else if (y < EnemyEventArgs.player2Y && nums[3] == false)
-                        numsBuf[3] = true;
-                }
+                targetX = EnemyEventArgs.player2X;
+                targetY = EnemyEventArgs.player2Y;
             }
 
-            if (!(numsBuf[0] == false && numsBuf[1] == false && numsBuf[2] == false && numsBuf[3] == false))
-            {
-                int answer = ranNumber.Next(0, 4);
-
-                while (numsBuf[answer] != true)
-                {
-                    if (numsBuf[answer] == true)
-                        return answer;
-                    else
-                        answer = ranNumber.Next(0, 4);
-                }
-                return answer;
-            }
-
-            return 4;
+            double dx = (targetX + 25) - (x + 25);
+            double dy = (targetY + 25) - (y + 25);
+            distance = Math.Sqrt(dx * dx + dy * dy);
+            return true;
         }
 
-        int MakeChanceDirect(List<Box> boxes, Form MainWindow)
+        private bool CanMoveTo(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, int nextX, int nextY)
         {
-            int answer = ranNumber.Next(0, 4);
-            int chanceDirectionPlayer = ranNumber.Next(0, 2);  // вероятность что на этом движении он будет двигаться в направлении игроков
-
-            bool[] nums = new bool[4] { false, false, false, false };
-            nums[0] = !IsInsideBattlefield(MainWindow, x - difference, y);
-            nums[1] = !IsInsideBattlefield(MainWindow, x + difference, y);
-            nums[2] = !IsInsideBattlefield(MainWindow, x, y - difference);
-            nums[3] = !IsInsideBattlefield(MainWindow, x, y + difference);
+            if (!IsInsideBattlefield(mainWindow, nextX, nextY))
+            {
+                return false;
+            }
 
             for (int i = 0; i < boxes.Count; i++)
             {
-                if (Collisions.check_touch(x - difference, y, boxes[i], MainWindow))
+                if (Collisions.check_touch(nextX, nextY, boxes[i], mainWindow))
                 {
-                    nums[0] = true;
-                }
-                if (Collisions.check_touch(x + difference, y, boxes[i], MainWindow))
-                {
-                    nums[1] = true;
-                }
-                if (Collisions.check_touch(x , y - difference, boxes[i], MainWindow))
-                {
-                    nums[2] = true;
-                }
-                if (Collisions.check_touch(x , y + difference, boxes[i], MainWindow))
-                {
-                    nums[3] = true;
+                    return false;
                 }
             }
 
-            if (nums[0] == true && nums[1] == true && nums[2] == true && nums[3] == true)
-                return 4;
-            else if (message.pauseTurn == 0)
+            int currentIndex = -1;
+            for (int i = 0; i < tanks.Count; i++)
             {
-                message.pauseTurn = GameTiming.ScaleLegacyTicks(100);
-                int stop = 20;
-
-                if(chanceDirectionPlayer == 0 && EnemyEventArgs.players != 0)
-                    answer = DirectPlayersAttached(nums);
-                else
-                    answer = ranNumber.Next(0, 4);
-
-                if (answer == 4)
-                    return 4;
-
-
-                while (nums[answer] != false)
+                if (ReferenceEquals(tanks[i], this))
                 {
-                    if (chanceDirectionPlayer == 0)
-                        answer = DirectPlayersAttached(nums);
-                    else
-                        answer = ranNumber.Next(0, 4);
-
-                    if (answer == 4)
-                        return 4;
-
-                    stop--;
-                    if (stop == 0)
-                        break;
+                    currentIndex = i;
+                    break;
                 }
-                return answer;
+            }
+
+            for (int i = 0; i < tanks.Count; i++)
+            {
+                if (i == currentIndex)
+                {
+                    continue;
+                }
+
+                if (Collisions.check_touch(nextX, nextY, tanks[i].x, tanks[i].y))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool TryMoveVector(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, double moveX, double moveY, bool updateRotation)
+        {
+            if (Math.Abs(moveX) < double.Epsilon && Math.Abs(moveY) < double.Epsilon)
+            {
+                return false;
+            }
+
+            double length = Math.Sqrt(moveX * moveX + moveY * moveY);
+            moveX /= length;
+            moveY /= length;
+
+            if (updateRotation)
+            {
+                SetRotationDegrees(VectorToRotationDegrees(moveX, moveY));
+                pictureTank = changePicture ? pictureTank2 : pictureTank1;
+            }
+
+            double totalDistance = GetMoveSpeed();
+            int probeCount = Math.Max(1, (int)Math.Ceiling(totalDistance / 1.5));
+            double startX = preciseX;
+            double startY = preciseY;
+
+            for (int probe = 1; probe <= probeCount; probe++)
+            {
+                double probeDistance = totalDistance * probe / probeCount;
+                int nextX = (int)Math.Round(startX + moveX * probeDistance);
+                int nextY = (int)Math.Round(startY + moveY * probeDistance);
+                if (!CanMoveTo(mainWindow, boxes, tanks, nextX, nextY))
+                {
+                    return false;
+                }
+            }
+
+            preciseX = startX + moveX * totalDistance;
+            preciseY = startY + moveY * totalDistance;
+            changePictureFun();
+            return true;
+        }
+
+        private bool TryMoveTowards(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, int targetX, int targetY)
+        {
+            double moveX = (targetX + 25) - (x + 25);
+            double moveY = (targetY + 25) - (y + 25);
+            return TryMoveVector(mainWindow, boxes, tanks, moveX, moveY, false);
+        }
+
+        private bool TryStrafe(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, int targetX, int targetY)
+        {
+            double dx = (targetX + 25) - (x + 25);
+            double dy = (targetY + 25) - (y + 25);
+            double length = Math.Sqrt(dx * dx + dy * dy);
+            if (length < double.Epsilon)
+            {
+                return false;
+            }
+
+            dx /= length;
+            dy /= length;
+            double sideX = -dy;
+            double sideY = dx;
+            if (message.pauseSpace <= 0)
+            {
+                message.pauseSpace = GameTiming.ScaleLegacyTicks(36 + ranNumber.Next(0, 24));
+                if (ranNumber.Next(0, 2) == 0)
+                {
+                    sideX = -sideX;
+                    sideY = -sideY;
+                }
+                message.goToPlayer = sideX >= 0 ? 1 : 2;
+            }
+            else
+            {
+                message.pauseSpace--;
+                if (message.goToPlayer == 2)
+                {
+                    sideX = -sideX;
+                    sideY = -sideY;
+                }
+            }
+
+            return TryMoveVector(mainWindow, boxes, tanks, sideX, sideY, false);
+        }
+
+        private bool TryPatrol(Form mainWindow, List<Box> boxes, List<BaseTank> tanks)
+        {
+            if (message.pauseTurn <= 0)
+            {
+                message.pauseTurn = GameTiming.ScaleLegacyTicks(55 + ranNumber.Next(0, 35));
+                message.patrolAngleDegrees += ranNumber.Next(-90, 91);
             }
             else
             {
                 message.pauseTurn--;
-
-                answer = ranNumber.Next(0, 4);
-
-                if (nums[direction] == false)
-                    return direction;
-                else
-                {
-                    int stop = 20;
-
-                    answer = DirectPlayersAttached(nums);
-                    if (answer == 4)
-                        return 4;
-
-                    while (nums[answer] != false)
-                    {
-                        answer = DirectPlayersAttached(nums);
-
-                        stop--;
-                        if (stop == 0)
-                            break;
-                    }
-                    return answer;
-                }
             }
+
+            double radians = (message.patrolAngleDegrees - 90.0) * Math.PI / 180.0;
+            double moveX = Math.Cos(radians);
+            double moveY = Math.Sin(radians);
+            if (!TryMoveVector(mainWindow, boxes, tanks, moveX, moveY, true))
+            {
+                message.patrolAngleDegrees += 120f;
+                return false;
+            }
+
+            return true;
         }
 
         public void Move(Form MainWindow, List<Box> boxes, List<Bullet> bullets, List<BaseTank> tanks)
         {
-            int difference = 2;
-            int turn = MakeChanceDirect(boxes, MainWindow);
-            if (turn == 0)
+            if (hitpoints <= 0 || bullets == null || tanks == null)
             {
-                RotatePicture(pictureTank1, direction, false, false, true, false);
-                RotatePicture(pictureTank2, direction, false, false, true, false);
-                direction = 0;
-
-                if (!IsInsideBattlefield(MainWindow, x - difference, y))
-                {
-                    return;
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x - difference, y, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseX -= GetMoveSpeed();
-
-                changePictureFun();
+                return;
             }
-            else if (turn == 2)
+
+            bool activeOnField = false;
+            for (int i = 0; i < tanks.Count; i++)
             {
-                RotatePicture(pictureTank1, direction, true, false, false, false);
-                RotatePicture(pictureTank2, direction, true, false, false, false);
-                direction = 2;
-
-                if (!IsInsideBattlefield(MainWindow, x, y - difference))
+                if (ReferenceEquals(tanks[i], this))
                 {
-                    return;
+                    activeOnField = true;
+                    break;
                 }
-
-                RotatePicture(pictureTank1, direction, true, false, false, false);
-                RotatePicture(pictureTank2, direction, true, false, false, false);
-                direction = 2;
-                for (int i = 0; i < boxes.Count; i++)
-                {
-                    if (Collisions.check_touch(x, y - difference, boxes[i], MainWindow))
-                    {
-                        return;
-                    }
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x, y - difference, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseY -= GetMoveSpeed();
-
-                changePictureFun();
             }
-            else if (turn == 1)
+
+            if (!activeOnField)
             {
-                RotatePicture(pictureTank1, direction, false, false, false, true);
-                RotatePicture(pictureTank2, direction, false, false, false, true);
-                direction = 1;
-
-                if (!IsInsideBattlefield(MainWindow, x + difference, y))
-                {
-                    return;
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x + difference, y, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseX += GetMoveSpeed();
-
-                changePictureFun();
+                return;
             }
-            else if (turn == 3)
+
+            int targetX;
+            int targetY;
+            double distance;
+            bool hasTarget = TryGetTargetPosition(out targetX, out targetY, out distance);
+            bool inAggroRange = hasTarget && distance <= message.aggroRange;
+            bool inAttackRange = hasTarget && distance <= message.attackRange;
+
+            float aimRotation = RotationDegrees;
+            if (hasTarget)
             {
-                RotatePicture(pictureTank1, direction, false, true, false, false);
-                RotatePicture(pictureTank2, direction, false, true, false, false);
-                direction = 3;
-
-                if (!IsInsideBattlefield(MainWindow, x, y + difference))
-                {
-                    return;
-                }
-
-                int I = 0;
-                for (int i = 0; i < tanks.Count; i++)
-                    if (tanks[i].x == x && tanks[i].y == y)
-                    { I = i; break; }
-
-                for (int i = 0; i < tanks.Count; i++)
-                {
-                    if (I == i)
-                        continue;
-
-                    if (Collisions.check_touch(x, y + difference, tanks[i].x, tanks[i].y))
-                        return;
-                }
-
-                preciseY += GetMoveSpeed();
-
-                changePictureFun();
+                aimRotation = (float)(Math.Atan2((targetY + 25) - (y + 25), (targetX + 25) - (x + 25)) * 180.0 / Math.PI + 90.0);
             }
-            else if (turn == 4)
+
+            bool moved = false;
+            if (inAttackRange)
             {
-                changePictureFun();
+                moved = TryStrafe(MainWindow, boxes, tanks, targetX, targetY);
+                SetRotationDegrees(aimRotation);
+                pictureTank = changePicture ? pictureTank2 : pictureTank1;
             }
+            else if (inAggroRange)
+            {
+                moved = TryMoveTowards(MainWindow, boxes, tanks, targetX, targetY);
+                SetRotationDegrees(aimRotation);
+                pictureTank = changePicture ? pictureTank2 : pictureTank1;
+            }
+            else
+            {
+                moved = TryPatrol(MainWindow, boxes, tanks);
+            }
+
+            if (!moved && hasTarget && inAggroRange && ranNumber.Next(0, 100) < 18 + message.aggressionLevel * 8)
+            {
+                moved = TryMoveTowards(MainWindow, boxes, tanks, targetX, targetY);
+                SetRotationDegrees(aimRotation);
+                pictureTank = changePicture ? pictureTank2 : pictureTank1;
+            }
+
             DateTime now = DateTime.UtcNow;
-            if (now >= nextFireAvailableAtUtc)
+            double fireChance = 0.20 + message.aggressionLevel * 0.18;
+            if (inAttackRange)
             {
-                Bullet bullet = new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, direction, 0, attack, bulletSpeedMultiplier);
-                nextFireAvailableAtUtc = now.AddSeconds(cooldownSeconds);
-                bullets.Add(bullet);
+                fireChance += 0.22;
+            }
+            if (message.isBoss)
+            {
+                fireChance += 0.20;
+            }
+            fireChance = Math.Min(0.95, fireChance);
+
+            if (hasTarget && inAttackRange && now >= nextFireAvailableAtUtc && ranNumber.NextDouble() < fireChance)
+            {
+                SetRotationDegrees(aimRotation);
+                pictureTank = changePicture ? pictureTank2 : pictureTank1;
+                float fireRotation = RotationDegrees;
+                if (message.isBoss)
+                {
+                    bool phaseTwo = maxHitpoints > 0 && hitpoints <= maxHitpoints / 2;
+                    int bulletSize = phaseTwo ? 22 : 18;
+                    float spread = phaseTwo ? 28f : 15f;
+                    bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation - spread, 0, attack, bulletSpeedMultiplier * 0.92, bulletSize));
+                    bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation, 0, attack, bulletSpeedMultiplier * 0.96, bulletSize));
+                    bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation + spread, 0, attack, bulletSpeedMultiplier * 0.92, bulletSize));
+                    if (phaseTwo)
+                    {
+                        bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation - 8f, 0, attack, bulletSpeedMultiplier * 1.0, 20));
+                        bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation + 8f, 0, attack, bulletSpeedMultiplier * 1.0, 20));
+                    }
+                    nextFireAvailableAtUtc = now.AddSeconds(phaseTwo ? Math.Max(0.28, cooldownSeconds * 0.62) : Math.Max(0.36, cooldownSeconds * 0.78));
+                }
+                else
+                {
+                    bullets.Add(new Bullet(ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, x, y, fireRotation, 0, attack, bulletSpeedMultiplier * 0.78, 14));
+                    nextFireAvailableAtUtc = now.AddSeconds(cooldownSeconds * 0.9);
+                }
             }
         }
     }

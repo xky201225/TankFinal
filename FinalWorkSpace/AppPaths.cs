@@ -24,12 +24,6 @@ namespace Peace_of_Tanks
 
             while (directory != null)
             {
-                string directCandidate = Path.Combine(directory.FullName, relativePath);
-                if (File.Exists(directCandidate))
-                {
-                    return directCandidate;
-                }
-
                 string projectCandidate = Path.Combine(directory.FullName, ProjectDirectoryName, relativePath);
                 if (File.Exists(projectCandidate))
                 {
@@ -39,12 +33,21 @@ namespace Peace_of_Tanks
                 directory = directory.Parent;
             }
 
-            return GetContentPath(relativeParts);
+            throw new FileNotFoundException("Could not find required content file.", relativePath);
         }
 
         public static string GetDataPath(string fileName)
         {
             return Path.Combine(BaseDirectory, fileName);
+        }
+
+        public static string LocalDatabaseConnectionString
+        {
+            get
+            {
+                string databasePath = FindContentPath("Database1.mdf");
+                return "Data Source=(LocalDB)\\MSSQLLocalDB;Initial Catalog=PeaceOfTanksData;AttachDbFilename=" + databasePath + ";Integrated Security=True";
+            }
         }
     }
 }

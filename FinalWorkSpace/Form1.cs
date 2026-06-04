@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -10,14 +10,22 @@ using System.Windows.Forms;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Drawing.Text;
+using System.Runtime.InteropServices;
 
 namespace Peace_of_Tanks
 {
     public partial class MainWindow : Form
     {
         BinaryFormatter formatter = new BinaryFormatter();
+        private const int PlayerMovementStepsPerFrame = 8;
+        private bool timerResolutionRaised;
 
-        public static event TankEvent MovePlayer1, MovePlayer2;  // 写械谢械谐邪褌 写胁懈卸械薪懈械 懈谐褉芯泻芯胁
+        [DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint period);
+
+        [DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint period);
+
         public static event AnimateEvent DelayEvent;             // 写械谢械谐邪褌 蟹邪写械褉卸泻邪 邪薪懈屑邪褑懈懈 (芯褌褉懈褋芯胁泻邪 褋 锌邪褍蟹邪屑懈 屑械卸写褍 褉懈褋褍薪泻邪屑懈)
         public static event EnemyEvent MoveEnemy;                // 写械谢械谐邪褌 写胁懈卸械薪懈械 胁褉邪谐芯胁
 
@@ -42,25 +50,69 @@ namespace Peace_of_Tanks
         private GameLaunchOptions launchOptions;
         private int player1Kills;
         private int player2Kills;
-        private bool baseDestroyed;
-        private int destroyedBaseOwner;
         private int activeEnemyLimit = 3;
         private int player1Damage;
         private int player2Damage;
         private int player1Deaths;
         private int player2Deaths;
+        private const int FinalSurvivalWave = 4;
         private bool settlementShown;
         private bool expRewarded;
         private int lastSettlementExpGain;
+        private int survivalWave;
+        private bool survivalBossWaveActive;
+        private bool survivalVictoryAchieved;
+        private int survivalWaveDelayTicks;
+        private string battleBannerText = string.Empty;
+        private int battleBannerTicks;
+        private int emergencySpawnCooldownTicks;
+        private string survivalResultText = string.Empty;
+        private sealed class DamageText
+        {
+            public float X;
+            public float Y;
+            public int Value;
+            public int Ticks;
+            public bool IsPlayerTarget;
+            public bool IsHeal;
+        }
+        private readonly List<DamageText> damageTexts = new List<DamageText>();
         private readonly List<Control> settlementControls = new List<Control>();
+        private readonly Random random = new Random();
+        private readonly Font killHudFont = new Font("Microsoft YaHei UI", 11, FontStyle.Bold);
+        private readonly Font battleHudFont = new Font("Microsoft YaHei UI", 11, FontStyle.Bold);
+        private readonly Font battleBannerFont = new Font("Microsoft YaHei UI", 18, FontStyle.Bold);
+        private readonly Font healthBarFont = new Font("Microsoft YaHei UI", 9f, FontStyle.Bold);
+        private readonly Font damageTextFont = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Bold);
+        private readonly Font skillHudFont = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold);
+        private readonly SolidBrush killHudSelfBrush = new SolidBrush(Color.FromArgb(255, 231, 145));
+        private readonly SolidBrush killHudOtherBrush = new SolidBrush(Color.FromArgb(210, 230, 245));
+        private readonly SolidBrush battleHudBrush = new SolidBrush(Color.FromArgb(190, 236, 255));
+        private readonly SolidBrush battleBannerBrush = new SolidBrush(Color.FromArgb(255, 227, 145));
+        private readonly SolidBrush skillReadyBrush = new SolidBrush(Color.FromArgb(255, 231, 145));
+        private readonly SolidBrush skillCooldownBrush = new SolidBrush(Color.FromArgb(205, 218, 235));
+        private readonly SolidBrush skillActiveBrush = new SolidBrush(Color.FromArgb(156, 244, 190));
+        private bool player1SkillHeld;
+        private bool player2SkillHeld;
 
         public bool ReturnToLobby { get { return returnToLobby; } }
+
+        private bool IsVersusBattle
+        {
+            get { return launchOptions != null && launchOptions.BattleRule == BattleRuleMode.Versus; }
+        }
+
+        private bool IsSurvivalBattle
+        {
+            get { return launchOptions == null || launchOptions.BattleRule == BattleRuleMode.Survival; }
+        }
 
         List<BaseTank> tanks = new List<BaseTank>();
         List<EnemyTank> enemies = new List<EnemyTank>();
         List<Bullet> bullets = new List<Bullet>();
         List<Box> boxes = new List<Box>();
         List<Animation> animations = new List<Animation>();
+        private readonly Dictionary<Point, Box> bulletBlockingBoxes = new Dictionary<Point, Box>();
 
         Graphics grMain, grMemory;
         Bitmap backgroundMain, backgroundMemory;
@@ -208,6 +260,8 @@ namespace Peace_of_Tanks
                         player1.message.isRight = true;
                     else if (e.KeyCode == Keys.NumPad0)
                         player1.message.isSpace = true;
+                    else if (e.KeyCode == Keys.E)
+                        player1.message.isSkill = true;
                 }
 
                 if (secondPlayer)
@@ -222,6 +276,8 @@ namespace Peace_of_Tanks
                         player2.message.isRight = true;
                     else if (e.KeyCode == Keys.Space)
                         player2.message.isSpace = true;
+                    else if (e.KeyCode == Keys.RControlKey)
+                        player2.message.isSkill = true;
                 }
             }
         }
@@ -248,6 +304,8 @@ namespace Peace_of_Tanks
 
                     else if (e.KeyCode == Keys.NumPad0)
                         player1.message.isSpace = false;
+                    else if (e.KeyCode == Keys.E)
+                        player1.message.isSkill = false;
                 }
 
                 if (secondPlayer)
@@ -263,6 +321,8 @@ namespace Peace_of_Tanks
 
                     else if (e.KeyCode == Keys.Space)
                         player2.message.isSpace = false;
+                    else if (e.KeyCode == Keys.RControlKey)
+                        player2.message.isSkill = false;
                 }
             }
         }
@@ -281,6 +341,31 @@ namespace Peace_of_Tanks
             if (e.Button == MouseButtons.Left)
             {
                 HandlePrimaryFireInput(false);
+            }
+        }
+
+        private void MainWindow_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (modeMenu < 3)
+            {
+                return;
+            }
+
+            if (IsNetworkGuest)
+            {
+                float aimAngle = CalculateAimAngle(e.Location, guestInputState.Up || guestInputState.Down || guestInputState.Left || guestInputState.Right ? player1 : null);
+                if (Math.Abs(guestInputState.AimAngleDegrees - aimAngle) > 0.1f)
+                {
+                    guestInputState.AimAngleDegrees = aimAngle;
+                    SendGuestInputState();
+                }
+
+                return;
+            }
+
+            if (firstPlayer)
+            {
+                UpdatePlayerAimFromMouse(player1, e.Location);
             }
         }
 
@@ -309,6 +394,35 @@ namespace Peace_of_Tanks
                     TryFirePlayer(player1, 1);
                 }
             }
+        }
+
+        private void UpdatePlayerAimFromMouse(PlayerTank player, Point mousePosition)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            player.SetRotationDegrees(CalculateAimAngle(mousePosition, player));
+        }
+
+        private static float CalculateAimAngle(Point mousePosition, BaseTank tank)
+        {
+            if (tank == null)
+            {
+                return 0f;
+            }
+
+            float centerX = tank.x + 25f;
+            float centerY = tank.y + 25f;
+            float dx = mousePosition.X - centerX;
+            float dy = mousePosition.Y - centerY;
+            if (Math.Abs(dx) < float.Epsilon && Math.Abs(dy) < float.Epsilon)
+            {
+                return tank.RotationDegrees;
+            }
+
+            return (float)((Math.Atan2(dy, dx) * 180.0 / Math.PI + 90.0 + 360.0) % 360.0);
         }
 
         private void fontsProjects()
@@ -495,45 +609,37 @@ namespace Peace_of_Tanks
                 picturePlayer2_.Visible = false;
                 PicturePlayer1_.Visible = false;
                 grMemory.DrawImage(BackgroundImage, 0, 0);
-                grMain.DrawImage(BackgroundImage, 0, 0);
                 timer1.Enabled = false;
                 StatisticMenu();
-
                 grMain.DrawImage(backgroundMemory, 0, 0);
             }
             else if (modeMenu == 5)
             {
                 grMemory.DrawImage(BackgroundImage, 0, 0);
-                grMain.DrawImage(BackgroundImage, 0, 0);
 
                 PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 ShowStatistic();
-
                 grMain.DrawImage(backgroundMemory, 0, 0);
             }
             else if (modeMenu == 6)
             {
                 grMemory.DrawImage(BackgroundImage, 0, 0);
-                grMain.DrawImage(BackgroundImage, 0, 0);
 
                 PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 RichRules.Visible = true;
                 RichRules.ReadOnly = true;
-
                 grMain.DrawImage(backgroundMemory, 0, 0);
             }
             else if (modeMenu == 7)
             {
                 grMemory.DrawImage(BackgroundImage, 0, 0);
-                grMain.DrawImage(BackgroundImage, 0, 0);
 
                 PicButton1Player.Visible = PicButton2Player.Visible = PicButtonStat.Visible = PicTank.Visible = PicRules.Visible = PicAbout.Visible = PicBackToLobby.Visible = false;
 
                 RichAbout.Visible = true;
                 RichAbout.ReadOnly = true;
-
                 grMain.DrawImage(backgroundMemory, 0, 0);
             }
 
@@ -577,9 +683,23 @@ namespace Peace_of_Tanks
                 }
 
                 grMemory = Graphics.FromImage(backgroundMemory);
+                ConfigureFrameGraphics(grMemory);
             }
 
             grMemory.DrawImage(backgroundMain, 0, 0);
+        }
+
+        private static void ConfigureFrameGraphics(Graphics graphics)
+        {
+            if (graphics == null)
+            {
+                return;
+            }
+
+            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+            graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
+            graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighSpeed;
         }
 
         private static Bitmap CreateCoverBackground(Image source, Size targetSize)
@@ -632,6 +752,11 @@ namespace Peace_of_Tanks
 
         private void AddAnimation(int x, int y, int type, int delay)
         {
+            if (animations.Count >= 48)
+            {
+                return;
+            }
+
             Animation anim = new Animation();
             anim.message.x = x;
             anim.message.y = y;
@@ -653,6 +778,58 @@ namespace Peace_of_Tanks
             }
         }
 
+        private void RebuildBulletBlockingBoxIndex()
+        {
+            bulletBlockingBoxes.Clear();
+            for (int i = 0; i < boxes.Count; i++)
+            {
+                Box box = boxes[i];
+                if (box is Box_Water || box is Box_Green)
+                {
+                    continue;
+                }
+
+                bulletBlockingBoxes[new Point(box.x, box.y)] = box;
+            }
+        }
+
+        private bool TryHandleBulletBoxCollision(int bulletIndex, Bullet bullet)
+        {
+            const int tileSize = 25;
+            const int bulletSize = 10;
+
+            int left = Math.Max(0, bullet.x / tileSize);
+            int right = Math.Max(left, (bullet.x + bulletSize - 1) / tileSize);
+            int top = Math.Max(0, bullet.y / tileSize);
+            int bottom = Math.Max(top, (bullet.y + bulletSize - 1) / tileSize);
+
+            for (int gridY = top; gridY <= bottom; gridY++)
+            {
+                for (int gridX = left; gridX <= right; gridX++)
+                {
+                    Box box;
+                    if (bulletBlockingBoxes.TryGetValue(new Point(gridX * tileSize, gridY * tileSize), out box))
+                    {
+                        if (Collisions.check_touch(this, bullet, box) == 2)
+                        {
+                            box.hitPoint--;
+                            AddHitEffect(box.x, box.y);
+                            if (box.hitPoint == 0)
+                            {
+                                boxes.Remove(box);
+                                bulletBlockingBoxes.Remove(new Point(box.x, box.y));
+                            }
+
+                            bullets.RemoveAt(bulletIndex);
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         private bool HandleBulletCollision(int bulletIndex)
         {
             Bullet bullet = bullets[bulletIndex];
@@ -664,22 +841,9 @@ namespace Peace_of_Tanks
                 return true;
             }
 
-            for (int j = 0; j < boxes.Count; j++)
+            if (TryHandleBulletBoxCollision(bulletIndex, bullet))
             {
-                if (Collisions.check_touch(this, bullet, boxes[j]) == 2)
-                {
-                    boxes[j].hitPoint--;
-                    AddHitEffect(boxes[j].x, boxes[j].y);
-                    if (boxes[j].hitPoint == 0)
-                    {
-                        MarkBaseDestroyed(boxes[j]);
-
-                        boxes.RemoveAt(j);
-                    }
-
-                    bullets.RemoveAt(bulletIndex);
-                    return true;
-                }
+                return true;
             }
 
             for (int j = 0; j < enemies.Count; j++)
@@ -699,7 +863,17 @@ namespace Peace_of_Tanks
                     {
                         AddHitEffect(enemies[j].x, enemies[j].y);
                         TrackDamage(bullet.who, bullet.damage);
+                        AddDamageText(enemies[j].x + 12, enemies[j].y, bullet.damage, false);
                         enemies[j].hitpoints -= bullet.damage;
+                        PlayerTank enemyAttacker = bullet.who == 1 ? player1 : (bullet.who == 2 ? player2 : null);
+                        if (enemyAttacker != null)
+                        {
+                            int lifestealHeal = enemyAttacker.ApplyLifesteal(bullet.damage);
+                            if (lifestealHeal > 0)
+                            {
+                                AddDamageText(enemyAttacker.x + 12, enemyAttacker.y - 18, lifestealHeal, false, true);
+                            }
+                        }
                         if (enemies[j].hitpoints <= 0)
                         {
                             RegisterEnemyKill(bullet.who);
@@ -719,8 +893,10 @@ namespace Peace_of_Tanks
                 }
 
                 AddHitEffect(player1.x, player1.y);
-                TrackDamage(bullet.who, bullet.damage);
-                player1.hitpoints -= bullet.damage;
+                int player1DamageTaken = ApplyDamage(player1, bullet.damage);
+                TrackDamage(bullet.who, player1DamageTaken);
+                AddDamageText(player1.x + 12, player1.y, player1DamageTaken, true);
+                player1.hitpoints -= player1DamageTaken;
                 if (player1.hitpoints <= 0 && bullet.who == 2)
                 {
                     player2Kills++;
@@ -738,8 +914,10 @@ namespace Peace_of_Tanks
                 }
 
                 AddHitEffect(player2.x, player2.y);
-                TrackDamage(bullet.who, bullet.damage);
-                player2.hitpoints -= bullet.damage;
+                int player2DamageTaken = ApplyDamage(player2, bullet.damage);
+                TrackDamage(bullet.who, player2DamageTaken);
+                AddDamageText(player2.x + 12, player2.y, player2DamageTaken, true);
+                player2.hitpoints -= player2DamageTaken;
                 if (player2.hitpoints <= 0 && bullet.who == 1)
                 {
                     player1Kills++;
@@ -754,14 +932,475 @@ namespace Peace_of_Tanks
 
         private void DrawKillHud(int player1KillCount, int player2KillCount)
         {
-            using (Font font = new Font("Microsoft YaHei UI", 11, FontStyle.Bold))
-            using (SolidBrush selfBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
-            using (SolidBrush otherBrush = new SolidBrush(Color.FromArgb(210, 230, 245)))
+            string selfText = IsNetworkGuest ? "己方击杀 " + player2KillCount : "己方击杀 " + player1KillCount;
+            string otherText = IsNetworkGuest ? "对手击杀 " + player1KillCount : "对手击杀 " + player2KillCount;
+            grMemory.DrawString(selfText, killHudFont, killHudSelfBrush, 310, 12);
+            grMemory.DrawString(otherText, killHudFont, killHudOtherBrush, 470, 12);
+        }
+
+        private void DrawPlayerHealthBar(PlayerTank player, bool active, bool rightSide, int lives)
+        {
+            if (player == null)
             {
-                string selfText = IsNetworkGuest ? "己方击杀 " + player2KillCount : "己方击杀 " + player1KillCount;
-                string otherText = IsNetworkGuest ? "对手击杀 " + player1KillCount : "对手击杀 " + player2KillCount;
-                grMemory.DrawString(selfText, font, selfBrush, 310, 12);
-                grMemory.DrawString(otherText, font, otherBrush, 470, 12);
+                return;
+            }
+
+            float width = 220f;
+            float height = 18f;
+            float x = ClientSize.Width - width - 18f;
+            float y = rightSide ? ClientSize.Height - 72f : ClientSize.Height - 36f;
+            float ratio = player.maxHitpoints <= 0 ? 0f : Math.Max(0f, Math.Min(1f, player.hitpoints / (float)player.maxHitpoints));
+            using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(180, 28, 32, 38)))
+            using (SolidBrush fillBrush = new SolidBrush(active ? (rightSide ? Color.FromArgb(90, 170, 255) : Color.FromArgb(70, 220, 120)) : Color.FromArgb(120, 120, 120)))
+            using (Pen borderPen = new Pen(Color.FromArgb(220, 235, 235, 235), 2f))
+            {
+                grMemory.FillRectangle(backBrush, x, y, width, height);
+                grMemory.FillRectangle(fillBrush, x + 2, y + 2, Math.Max(0, (width - 4) * ratio), height - 4);
+                grMemory.DrawRectangle(borderPen, x, y, width, height);
+            }
+
+            string text = (rightSide ? "P2 " : "P1 ") + Math.Max(0, player.hitpoints) + "/" + Math.Max(1, player.maxHitpoints) + "  生命 " + Math.Max(0, lives);
+            grMemory.DrawString(text, healthBarFont, Brushes.White, x, y - 18f);
+        }
+
+        private void DrawWorldHealthBar(int x, int y, int width, int current, int max, Color fillColor)
+        {
+            if (max <= 0)
+            {
+                return;
+            }
+
+            float ratio = Math.Max(0f, Math.Min(1f, current / (float)max));
+            using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(180, 22, 24, 30)))
+            using (SolidBrush fillBrush = new SolidBrush(fillColor))
+            using (Pen borderPen = new Pen(Color.FromArgb(210, 240, 240, 240), 1f))
+            {
+                grMemory.FillRectangle(backBrush, x, y, width, 7);
+                grMemory.FillRectangle(fillBrush, x + 1, y + 1, Math.Max(0, (width - 2) * ratio), 5);
+                grMemory.DrawRectangle(borderPen, x, y, width, 7);
+            }
+        }
+
+        private void DrawActorWorldHealthBars()
+        {
+            for (int i = 0; i < enemies.Count; i++)
+            {
+                int barWidth = enemies[i].IsBossEntity ? 64 : 40;
+                int barOffsetX = enemies[i].IsBossEntity ? -7 : 5;
+                DrawWorldHealthBar(enemies[i].x + barOffsetX, enemies[i].y - 10, barWidth, enemies[i].hitpoints, enemies[i].maxHitpoints, enemies[i].IsBossEntity ? Color.FromArgb(186, 72, 210) : Color.FromArgb(226, 86, 86));
+            }
+
+            if (setting.twoPlayer || networkMode)
+            {
+                if (firstPlayer)
+                {
+                    DrawWorldHealthBar(player1.x + 5, player1.y - 10, 40, player1.hitpoints, player1.maxHitpoints, Color.FromArgb(90, 220, 120));
+                }
+
+                if (secondPlayer)
+                {
+                    DrawWorldHealthBar(player2.x + 5, player2.y - 10, 40, player2.hitpoints, player2.maxHitpoints, Color.FromArgb(90, 170, 255));
+                }
+            }
+        }
+
+        private void DrawBossHealthBar()
+        {
+            if (!survivalBossWaveActive || enemies.Count == 0)
+            {
+                return;
+            }
+
+            EnemyTank boss = enemies.Where(enemy => enemy.IsBossEntity).OrderByDescending(enemy => enemy.maxHitpoints).FirstOrDefault() ?? enemies.OrderByDescending(enemy => enemy.maxHitpoints).FirstOrDefault();
+            if (boss == null)
+            {
+                return;
+            }
+
+            float width = Math.Min(520f, ClientSize.Width * 0.48f);
+            float x = (ClientSize.Width - width) / 2f;
+            float y = 16f;
+            float ratio = boss.maxHitpoints <= 0 ? 0f : Math.Max(0f, Math.Min(1f, boss.hitpoints / (float)boss.maxHitpoints));
+            using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(190, 25, 18, 22)))
+            using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(186, 72, 210)))
+            using (Pen borderPen = new Pen(Color.FromArgb(255, 240, 220, 120), 2f))
+            {
+                grMemory.FillRectangle(backBrush, x, y, width, 18f);
+                grMemory.FillRectangle(fillBrush, x + 2f, y + 2f, Math.Max(0f, (width - 4f) * ratio), 14f);
+                grMemory.DrawRectangle(borderPen, x, y, width, 18f);
+            }
+
+            string text = "Boss " + Math.Max(0, boss.hitpoints) + "/" + Math.Max(1, boss.maxHitpoints);
+            SizeF size = grMemory.MeasureString(text, battleHudFont);
+            grMemory.DrawString(text, battleHudFont, Brushes.White, x + (width - size.Width) / 2f, y - 20f);
+        }
+
+        private void DrawSkillPanel(float x, float y, float width, float height, string title, string state, string extra, SolidBrush stateBrush, bool active)
+        {
+            Color fillColor = active ? Color.FromArgb(200, 18, 30, 45) : Color.FromArgb(150, 40, 46, 58);
+            Color borderColor = active ? Color.FromArgb(255, 215, 120) : Color.FromArgb(150, 110, 125, 145);
+            using (SolidBrush panelBrush = new SolidBrush(fillColor))
+            using (Pen borderPen = new Pen(borderColor, 2f))
+            {
+                grMemory.FillRectangle(panelBrush, x, y, width, height);
+                grMemory.DrawRectangle(borderPen, x, y, width, height);
+                grMemory.FillEllipse(Brushes.WhiteSmoke, x + 10, y + 12, 34, 34);
+                grMemory.DrawEllipse(Pens.Gray, x + 10, y + 12, 34, 34);
+                grMemory.DrawString(title, skillHudFont, Brushes.White, x + 54, y + 8);
+                grMemory.DrawString(state, skillHudFont, stateBrush, x + 54, y + 28);
+                if (!string.IsNullOrEmpty(extra))
+                {
+                    grMemory.DrawString(extra, skillHudFont, skillActiveBrush, x + 54, y + 48);
+                }
+            }
+        }
+
+        private void DrawSkillHud()
+        {
+            DrawSkillHud(player1, firstPlayer, false);
+            if (setting.twoPlayer || networkMode)
+            {
+                DrawSkillHud(player2, secondPlayer, true);
+            }
+        }
+
+        private void DrawSkillHud(PlayerTank player, bool active, bool rightSide)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            string title = TankSkillCatalog.GetDisplayName(player.SkillType);
+            string state;
+            SolidBrush brush;
+
+            if (!active)
+            {
+                state = "已淘汰";
+                brush = skillCooldownBrush;
+            }
+            else if (player.IsSkillReady)
+            {
+                state = "CD 就绪";
+                brush = skillReadyBrush;
+            }
+            else
+            {
+                state = "CD " + player.GetRemainingSkillCooldownSeconds().ToString("0.0") + "s";
+                brush = skillCooldownBrush;
+            }
+
+            string extra = rightSide ? "释放键 Ctrl" : "释放键 E";
+            if (player.IsOverdriveActive)
+            {
+                extra += "  |  过载中";
+            }
+            else if (player.IsLifestealActive)
+            {
+                extra += "  |  吸血中";
+            }
+            else if (player.BarrageShotsRemaining > 0)
+            {
+                extra += "  |  齐射 " + player.BarrageShotsRemaining;
+            }
+
+            float panelWidth = Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
+            float panelHeight = 78f;
+            float x = rightSide ? ClientSize.Width - panelWidth - 18f : 18f;
+            float y = ClientSize.Height - panelHeight - 22f;
+            DrawSkillPanel(x, y, panelWidth, panelHeight, title, state, extra, brush, active);
+        }
+
+        private string GetBattleStatusText()
+        {
+            if (IsSurvivalBattle)
+            {
+                if (survivalVictoryAchieved)
+                {
+                    return "生存模式：已击破最终Boss";
+                }
+
+                if (networkMode && CountActiveNetworkPlayers() == 0)
+                {
+                    return "协作失败：双方已全部被击破";
+                }
+
+                string waveText = survivalBossWaveActive ? "Boss波" : "第 " + Math.Max(1, survivalWave) + " 波";
+                return waveText + " | 剩余敌人 " + Math.Max(0, setting.countEnemies);
+            }
+
+            int remainToWin = Math.Max(0, 10 - Math.Max(player1Kills, player2Kills));
+            return "竞技模式进行中 | 距离胜利还需 " + remainToWin + " 击杀";
+        }
+
+        private void DrawSurvivalHud()
+        {
+            DrawSurvivalHud(survivalWave, setting.countEnemies, survivalBossWaveActive, survivalVictoryAchieved);
+        }
+
+        private void DrawSurvivalHud(int wave, int enemiesLeft, bool bossWave, bool victory)
+        {
+            if (wave <= 0 && !victory)
+            {
+                return;
+            }
+
+            string title = victory ? "生存模式完成" : (bossWave ? "Boss波" : "第 " + wave + " 波");
+            string detail;
+            if (victory)
+            {
+                detail = string.IsNullOrEmpty(survivalResultText) ? "准备结算" : survivalResultText;
+            }
+            else if (!string.IsNullOrEmpty(survivalResultText) && (networkMode || currentGameMode == GameMode.NetworkCoop) && CountActiveNetworkPlayers() == 0)
+            {
+                detail = survivalResultText;
+            }
+            else if (bossWave)
+            {
+                detail = "最终Boss剩余血量阶段 | 敌人 " + Math.Max(0, enemiesLeft);
+            }
+            else
+            {
+                detail = "剩余敌人 " + Math.Max(0, enemiesLeft);
+            }
+            grMemory.DrawString(title, battleHudFont, battleHudBrush, 18, 12);
+            grMemory.DrawString(detail, battleHudFont, battleHudBrush, 18, 32);
+        }
+
+        private void DrawBattleBanner(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            SizeF textSize = grMemory.MeasureString(text, battleBannerFont);
+            float x = (ClientSize.Width - textSize.Width) / 2f;
+            grMemory.DrawString(text, battleBannerFont, battleBannerBrush, x, 70f);
+        }
+
+        private void ResetSurvivalFlow()
+        {
+            survivalWave = 0;
+            survivalBossWaveActive = false;
+            survivalVictoryAchieved = false;
+            survivalWaveDelayTicks = 0;
+            battleBannerText = string.Empty;
+            battleBannerTicks = 0;
+            emergencySpawnCooldownTicks = 0;
+            survivalResultText = string.Empty;
+        }
+
+        private void ShowBattleBanner(string text)
+        {
+            battleBannerText = text ?? string.Empty;
+            battleBannerTicks = string.IsNullOrEmpty(battleBannerText) ? 0 : GameTiming.ScaleLegacyTicks(120);
+        }
+
+        private void InitializeBattleFlow()
+        {
+            ResetSurvivalFlow();
+            if (IsSurvivalBattle)
+            {
+                StartNextSurvivalWave();
+            }
+            else
+            {
+                setting.countEnemies = 0;
+                activeEnemyLimit = 0;
+                timeSpawn = 0;
+            }
+        }
+
+        private void UpdateBattleFlow()
+        {
+            if (battleBannerTicks > 0)
+            {
+                battleBannerTicks--;
+            }
+
+            if (!IsSurvivalBattle || survivalVictoryAchieved)
+            {
+                return;
+            }
+
+            if (survivalWaveDelayTicks > 0)
+            {
+                survivalWaveDelayTicks--;
+                if (survivalWaveDelayTicks == 0)
+                {
+                    StartNextSurvivalWave();
+                }
+                return;
+            }
+
+            if (survivalWave > 0 && setting.countEnemies <= 0 && enemies.Count == 0)
+            {
+                if (survivalBossWaveActive || survivalWave >= FinalSurvivalWave)
+                {
+                    survivalVictoryAchieved = true;
+                    survivalResultText = networkMode || currentGameMode == GameMode.NetworkCoop ? "协作完成，已击破最终Boss" : "单人通关，已击破最终Boss";
+                    ShowBattleBanner("Boss已被击破");
+                    return;
+                }
+
+                ApplySurvivalWaveUpgrade(survivalWave);
+                survivalWaveDelayTicks = GameTiming.ScaleLegacyTicks(36);
+            }
+        }
+
+        private void StartNextSurvivalWave()
+        {
+            if (!IsSurvivalBattle || survivalVictoryAchieved)
+            {
+                return;
+            }
+
+            survivalWave++;
+            survivalBossWaveActive = survivalWave >= FinalSurvivalWave;
+            ConfigureSurvivalWave();
+            ShowBattleBanner(survivalBossWaveActive ? "最终Boss来袭" : "第 " + survivalWave + " 波开始");
+        }
+
+        private void ConfigureSurvivalWave()
+        {
+            if (survivalBossWaveActive)
+            {
+                ConfigureBossWave();
+                return;
+            }
+
+            setting.countEnemies = GetSurvivalWaveEnemyCount(survivalWave);
+            activeEnemyLimit = GetSurvivalWaveActiveLimit(survivalWave);
+            setting.timeSpawn = GetSurvivalSpawnDelayTicks(survivalWave);
+            timeSpawn = 0;
+            SpawnWaveFrontline();
+        }
+
+        private int GetSurvivalWaveEnemyCount(int wave)
+        {
+            int count = 6 + wave * 3 + setting.difficulty * 2;
+            if (currentGameMode == GameMode.NetworkCoop || networkMode)
+            {
+                count += 3;
+            }
+
+            return count;
+        }
+
+        private int GetSurvivalWaveActiveLimit(int wave)
+        {
+            int limit = 2 + wave + setting.difficulty;
+            if (currentGameMode == GameMode.NetworkCoop || networkMode)
+            {
+                limit++;
+            }
+
+            return Math.Min(8, Math.Max(2, limit));
+        }
+
+        private int GetSurvivalSpawnDelayTicks(int wave)
+        {
+            int legacyTicks = 180 - wave * 25 - setting.difficulty * 20;
+            return GameTiming.ScaleLegacyTicks(Math.Max(35, legacyTicks));
+        }
+
+        private void SpawnWaveFrontline()
+        {
+            int spawnCount = Math.Min(activeEnemyLimit, Math.Max(0, setting.countEnemies));
+            for (int i = 0; i < spawnCount; i++)
+            {
+                SpawnEnemyAt(i);
+            }
+        }
+
+        private void ConfigureBossWave()
+        {
+            int health = 180 + setting.difficulty * 50;
+            int attack = 32 + setting.difficulty * 8;
+            double bossSpeed = 1.2;
+            double bossCooldown = 0.65;
+            if (currentGameMode == GameMode.NetworkCoop || networkMode)
+            {
+                health += 60;
+                attack += 6;
+                bossSpeed = 1.28;
+                bossCooldown = 0.58;
+            }
+
+            if (setting.difficulty >= 2)
+            {
+                health += 35;
+                attack += 6;
+                bossSpeed += 0.08;
+                bossCooldown = Math.Max(0.42, bossCooldown - 0.06);
+            }
+
+            setting.countEnemies = 1;
+            activeEnemyLimit = 1;
+            setting.timeSpawn = 0;
+            timeSpawn = 0;
+            SpawnEnemyAt(0, TankType.Purple, health, attack, bossSpeed, bossCooldown);
+            ShowBattleBanner("最终Boss来袭：高血量、高火力、强压制");
+        }
+
+        private void ApplySurvivalWaveUpgrade(int clearedWave)
+        {
+            switch (clearedWave)
+            {
+                case 1:
+                    UpgradeSurvivalPlayers(12, 0, 1.0, 1.0, 1.0);
+                    ShowBattleBanner("波次奖励：生命上限 +12，立即恢复 12 生命");
+                    break;
+                case 2:
+                    UpgradeSurvivalPlayers(0, 6, 1.0, 1.08, 1.05);
+                    ShowBattleBanner("波次奖励：攻击 +6，移速 +8%，弹速 +5%");
+                    break;
+                default:
+                    UpgradeSurvivalPlayers(8, 5, 0.85, 1.05, 1.08);
+                    ShowBattleBanner("波次奖励：生命上限 +8，攻击 +5，冷却 -15%，移速 +5%，弹速 +8%");
+                    break;
+            }
+        }
+
+        private void UpgradeSurvivalPlayers(int healthBonus, int attackBonus, double cooldownMultiplier, double speedMultiplierBonus, double bulletSpeedMultiplierBonus)
+        {
+            ApplyUpgradeToPlayer(player1, firstPlayer, healthBonus, attackBonus, cooldownMultiplier, speedMultiplierBonus, bulletSpeedMultiplierBonus);
+            ApplyUpgradeToPlayer(player2, secondPlayer, healthBonus, attackBonus, cooldownMultiplier, speedMultiplierBonus, bulletSpeedMultiplierBonus);
+        }
+
+        private static void ApplyUpgradeToPlayer(PlayerTank player, bool active, int healthBonus, int attackBonus, double cooldownMultiplier, double speedMultiplierBonus, double bulletSpeedMultiplierBonus)
+        {
+            if (!active || player == null)
+            {
+                return;
+            }
+
+            if (healthBonus > 0)
+            {
+                player.maxHitpoints += healthBonus;
+                player.hitpoints = Math.Min(player.maxHitpoints, player.hitpoints + healthBonus);
+            }
+
+            if (attackBonus > 0)
+            {
+                player.attack += attackBonus;
+            }
+
+            if (cooldownMultiplier > 0 && Math.Abs(cooldownMultiplier - 1.0) > 0.001)
+            {
+                player.cooldownSeconds = Math.Max(0.25, player.cooldownSeconds * cooldownMultiplier);
+            }
+
+            if (speedMultiplierBonus > 0 && Math.Abs(speedMultiplierBonus - 1.0) > 0.001)
+            {
+                player.speedMultiplier *= speedMultiplierBonus;
+            }
+
+            if (bulletSpeedMultiplierBonus > 0 && Math.Abs(bulletSpeedMultiplierBonus - 1.0) > 0.001)
+            {
+                player.bulletSpeedMultiplier *= bulletSpeedMultiplierBonus;
             }
         }
 
@@ -784,7 +1423,7 @@ namespace Peace_of_Tanks
                 }
             };
 
-            if (setting.twoPlayer || currentGameMode == GameMode.TwoPlayer || currentGameMode == GameMode.ThreePlayer || networkMode)
+            if (setting.twoPlayer || currentGameMode != GameMode.SinglePlayer || networkMode)
             {
                 results.Add(new PlayerResultSnapshot
                 {
@@ -796,19 +1435,10 @@ namespace Peace_of_Tanks
                 });
             }
 
-            if (launchOptions != null && launchOptions.BattleRule == BattleRuleMode.FreeBattle)
+            if (IsVersusBattle)
             {
                 results = results
                     .OrderByDescending(r => r.Kills)
-                    .ThenByDescending(r => r.Damage)
-                    .ThenBy(r => r.Deaths)
-                    .ToList();
-            }
-            else if (launchOptions != null && launchOptions.BattleRule == BattleRuleMode.BaseDefense && destroyedBaseOwner != 0)
-            {
-                results = results
-                    .OrderByDescending(r => GetBaseDefenseWinnerSortValue(r))
-                    .ThenByDescending(r => r.Kills)
                     .ThenByDescending(r => r.Damage)
                     .ThenBy(r => r.Deaths)
                     .ToList();
@@ -828,6 +1458,31 @@ namespace Peace_of_Tanks
                 results[i].Rank = i + 1;
             }
 
+            if (IsSurvivalBattle && survivalVictoryAchieved)
+            {
+                foreach (PlayerResultSnapshot result in results)
+                {
+                    if (result.IsActive)
+                    {
+                        result.Name += "（通关）";
+                    }
+                }
+            }
+            else if (!networkMode && IsSurvivalBattle && !survivalVictoryAchieved)
+            {
+                foreach (PlayerResultSnapshot result in results)
+                {
+                    result.Name += "（失败）";
+                }
+            }
+            else if (networkMode && IsSurvivalBattle && CountActiveNetworkPlayers() == 0)
+            {
+                foreach (PlayerResultSnapshot result in results)
+                {
+                    result.Name += "（失败）";
+                }
+            }
+
             return results;
         }
 
@@ -845,35 +1500,6 @@ namespace Peace_of_Tanks
             }
 
             return activePlayers;
-        }
-
-        private int GetBaseDefenseWinnerSortValue(PlayerResultSnapshot result)
-        {
-            string playerName = destroyedBaseOwner == 1 ? "玩家2" : "玩家1";
-            if (!networkMode && currentGameMode == GameMode.SinglePlayer && destroyedBaseOwner == 2)
-            {
-                playerName = "己方";
-            }
-
-            return result.Name == playerName ? 1 : 0;
-        }
-
-        private void MarkBaseDestroyed(Box box)
-        {
-            if (!(box is Box_Base))
-            {
-                return;
-            }
-
-            baseDestroyed = true;
-            if (box is Box_PlayerBase)
-            {
-                destroyedBaseOwner = 1;
-            }
-            else if (box is Box_EnemyBase)
-            {
-                destroyedBaseOwner = 2;
-            }
         }
 
         private void HandleEscapeExitBattle()
@@ -1046,12 +1672,105 @@ namespace Peace_of_Tanks
             player2Damage = 0;
             player1Deaths = 0;
             player2Deaths = 0;
-            baseDestroyed = false;
-            destroyedBaseOwner = 0;
             settlementShown = false;
             expRewarded = false;
             lastSettlementExpGain = 0;
+            player1SkillHeld = false;
+            player2SkillHeld = false;
+            ResetSurvivalFlow();
+            if (player1 != null) player1.ResetSkillState();
+            if (player2 != null) player2.ResetSkillState();
             ClearSettlementControls();
+        }
+
+        private static int ApplyDamage(PlayerTank player, int damage)
+        {
+            if (player == null)
+            {
+                return damage;
+            }
+
+            int actualDamage = player.AbsorbDamage(damage);
+            return Math.Max(0, actualDamage);
+        }
+
+        private void AddDamageText(int x, int y, int value, bool isPlayerTarget, bool isHeal = false)
+        {
+            if (value <= 0)
+            {
+                return;
+            }
+
+            damageTexts.Add(new DamageText
+            {
+                X = x + 10,
+                Y = y - 8,
+                Value = value,
+                Ticks = GameTiming.ScaleLegacyTicks(30),
+                IsPlayerTarget = isPlayerTarget,
+                IsHeal = isHeal
+            });
+        }
+
+        private void UpdateDamageTexts()
+        {
+            for (int i = damageTexts.Count - 1; i >= 0; i--)
+            {
+                damageTexts[i].Y -= 0.8f;
+                damageTexts[i].Ticks--;
+                if (damageTexts[i].Ticks <= 0)
+                {
+                    damageTexts.RemoveAt(i);
+                }
+            }
+        }
+
+        private void DrawDamageTexts()
+        {
+            for (int i = 0; i < damageTexts.Count; i++)
+            {
+                DamageText damageText = damageTexts[i];
+                string text = damageText.IsHeal ? "+" + damageText.Value : "-" + damageText.Value;
+                Brush brush = damageText.IsHeal ? Brushes.LimeGreen : (damageText.IsPlayerTarget ? Brushes.OrangeRed : Brushes.Gold);
+                grMemory.DrawString(text, damageTextFont, Brushes.Black, damageText.X + 1, damageText.Y + 1);
+                grMemory.DrawString(text, damageTextFont, brush, damageText.X, damageText.Y);
+            }
+        }
+
+        private void ProcessPlayerSkillInputs()
+        {
+            ProcessPlayerSkillInput(player1, firstPlayer, ref player1SkillHeld);
+            ProcessPlayerSkillInput(player2, secondPlayer, ref player2SkillHeld);
+        }
+
+        private void ProcessPlayerSkillInput(PlayerTank player, bool active, ref bool skillHeld)
+        {
+            if (player == null)
+            {
+                skillHeld = false;
+                return;
+            }
+
+            player.ExpireTimedEffects();
+            if (!active)
+            {
+                skillHeld = false;
+                return;
+            }
+
+            if (player.message.isSkill)
+            {
+                if (!skillHeld)
+                {
+                    player.TryActivateSkill(this, boxes, tanks);
+                }
+
+                skillHeld = true;
+            }
+            else
+            {
+                skillHeld = false;
+            }
         }
 
         private static bool IsBlockingBox(Box box)
@@ -1165,12 +1884,12 @@ namespace Peace_of_Tanks
             }
         }
 
-        private void SpawnEnemyAt(int spawnIndex)
+        private void SpawnEnemyAt(int spawnIndex, TankType? forcedTankType = null, int? healthOverride = null, int? attackOverride = null, double speedMultiplierOverride = 1.0, double? cooldownOverride = null)
         {
             int index = Math.Abs(spawnIndex) % 4;
             int layer = Math.Abs(spawnIndex) / 4;
             int offset = layer * 60;
-            TankType enemyType = TankResourceLoader.GetRandomEnemyTankType();
+            TankType enemyType = forcedTankType ?? TankResourceLoader.GetRandomEnemyTankType();
             var images = TankResourceLoader.GetEnemyTankImages(enemyType);
             var config = TankConfigs.GetConfig(enemyType);
             int x = level.masPointsSpawnEnemy[index, 0];
@@ -1184,16 +1903,28 @@ namespace Peace_of_Tanks
             {
                 x = Math.Max(50, Math.Min(ClientRectangle.Right - 100, x + offset));
             }
-            Point spawnPoint = FindSafeSpawnPoint(x, y, tanks);
+            Point spawnPoint = FindSafeSpawnPoint(x, y, tanks.Concat(enemies));
 
             EnemyTank enemy = new EnemyTank(images.Item1, images.Item2,
                 ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan,
                 spawnPoint.X,
                 spawnPoint.Y,
                 2,
-                config.BaseHealth,
-                config.BaseAttack);
+                healthOverride ?? config.BaseHealth,
+                attackOverride ?? config.BaseAttack);
             enemy.TankType = enemyType;
+            enemy.message.aggressionLevel = setting != null ? setting.difficulty + 1 : 1;
+            enemy.message.aggroRange = 220 + enemy.message.aggressionLevel * 70;
+            enemy.message.attackRange = 150 + enemy.message.aggressionLevel * 45;
+            enemy.message.isBoss = healthOverride.HasValue && (healthOverride.Value >= 180 || enemyType == TankType.Purple);
+            enemy.IsBossEntity = enemy.message.isBoss;
+            enemy.speedMultiplier = enemy.message.isBoss ? Math.Max(1.28, speedMultiplierOverride * 1.28) : Math.Max(0.6, speedMultiplierOverride);
+            enemy.bulletSpeedMultiplier = enemy.message.isBoss ? 1.18 : 1.0;
+            if (cooldownOverride.HasValue)
+            {
+                enemy.cooldownSeconds = Math.Max(0.25, cooldownOverride.Value);
+                enemy.nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(enemy.cooldownSeconds);
+            }
 
             enemies.Add(enemy);
             tanks.Add(enemy);
@@ -1202,8 +1933,29 @@ namespace Peace_of_Tanks
 
         private bool ShouldKeepEnemyCountStable()
         {
-            return launchOptions != null
-                && (launchOptions.BattleRule == BattleRuleMode.FreeBattle || launchOptions.BattleRule == BattleRuleMode.BaseDefense);
+            return false;
+        }
+
+        private bool TryEmergencySpawnEnemy()
+        {
+            if (setting.countEnemies <= 0 || activeEnemyLimit <= 0 || enemies.Count > 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                int spawnIndex = random.Next(0, 4);
+                SpawnEnemyAt(spawnIndex);
+                emergencySpawnCooldownTicks = GameTiming.ScaleLegacyTicks(18);
+                return true;
+            }
+            catch
+            {
+                timeSpawn = Math.Min(setting.timeSpawn, GameTiming.ScaleLegacyTicks(24));
+                emergencySpawnCooldownTicks = GameTiming.ScaleLegacyTicks(18);
+                return false;
+            }
         }
 
         private void RegisterEnemyKill(int shooter)
@@ -1220,6 +1972,25 @@ namespace Peace_of_Tanks
             else if (shooter == 2)
             {
                 player2Kills++;
+            }
+        }
+
+        private void RemoveDefeatedEnemies()
+        {
+            for (int i = 0; i < enemies.Count; i++)
+            {
+                if (enemies[i].hitpoints > 0)
+                {
+                    continue;
+                }
+
+                EnemyTank defeatedEnemy = enemies[i];
+                AddExplosionEffect(defeatedEnemy.x, defeatedEnemy.y);
+                MoveEnemy -= defeatedEnemy.Move;
+                tanks.Remove(defeatedEnemy);
+                enemies.RemoveAt(i);
+                i--;
+                RefillEnemiesIfNeeded();
             }
         }
 
@@ -1286,11 +2057,6 @@ namespace Peace_of_Tanks
 
         private void ShowStatistic()
         {
-            int countDegree = 0;
-            int numBuf;
-            int[] masNum = new int[10];
-            int bufPoints;
-
             int y = 200, x = 320;
 
             labelStat1.Visible = labelStat2.Visible = labelStat3.Visible = labelStat4.Visible = labelStat5.Visible = labelStat6.Visible = true;
@@ -1298,29 +2064,10 @@ namespace Peace_of_Tanks
 
             for (int i = 0; i < 10; i++)
             {
-                countDegree = 0;
                 x = 320;
 
                 WriteNameLabelStat(i, stats.statistic[i].name);
-
-                bufPoints = stats.statistic[i].points;
-
-                if (bufPoints == 0)
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x += 30 , y);
-                else
-                    while (bufPoints != 0)
-                    {
-                        numBuf = bufPoints % 10;
-                        masNum[countDegree] = numBuf;
-                        bufPoints /= 10;
-                        countDegree++;
-                    }
-
-                for (int j = countDegree - 1; j >= 0; j--)
-                {
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(masNum[j]), x += 30, y);
-                    x += 15;
-                }
+                DrawNumber(stats.statistic[i].points, x + 30, y, 40);
 
                 y += 40;
             }
@@ -1336,56 +2083,14 @@ namespace Peace_of_Tanks
             if (stats.CheckRecord(setting.stats2))
                 EnterName2.Enabled = EnterName2.Visible = buttonName2.Visible= true;
 
-            int countDegree = 0;
-            int numBuf;
-            int[] masNum = new int[10];
-            int bufPoints = setting.pointsPlayer1;
-
             int x = 300;
-
-            if (bufPoints == 0)
-                Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x, 180);
-            else
-                while (bufPoints != 0)
-                {
-                    numBuf = bufPoints % 10;
-                    masNum[countDegree] = numBuf;
-                    bufPoints /= 10;
-                    countDegree++;
-                }
-
-            for (int i = countDegree - 1; i >= 0; i--)
-            {
-                Numbers.Draw(grMemory, Numbers.ReturnNumPic(masNum[i]), x, 180);
-                x += 30;
-            }
+            DrawNumber(setting.pointsPlayer1, x, 180);
 
             if (setting.twoPlayer)
             {
                 PictureStat2.Visible = true;
                 PictureStat2.Image = CreateTextBitmap("二号玩家", PictureStat2.Width, PictureStat2.Height, 17);
-
-                countDegree = 0;
-                bufPoints = setting.pointsPlayer2;
-
-                x = 300;
-
-                if (bufPoints == 0)
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x, 240);
-                else
-                    while (bufPoints != 0)
-                    {
-                        numBuf = bufPoints % 10;
-                        masNum[countDegree] = numBuf;
-                        bufPoints /= 10;
-                        countDegree++;
-                    }
-
-                for (int i = countDegree - 1; i >= 0; i--)
-                {
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(masNum[i]), x, 240);
-                    x += 30;
-                }
+                DrawNumber(setting.pointsPlayer2, 300, 240);
             }
         }
 
@@ -1423,7 +2128,6 @@ namespace Peace_of_Tanks
                 Point player1Spawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[0, 0], level.masPointsSpawnPlayers[0, 1], null);
                 player1.x = player1Spawn.X;
                 player1.y = player1Spawn.Y;
-                MovePlayer1 += player1.Move;
 
                 PicturePlayer1_.Visible = true;
 
@@ -1434,15 +2138,11 @@ namespace Peace_of_Tanks
                     player2.x = player2Spawn.X;
                     player2.y = player2Spawn.Y;
                     tanks.Add(player2);
-                    MovePlayer2 += player2.Move;
                     picturePlayer2_.Visible = true;
                     secondPlayer = true;
                 }
 
-                for (int i = enemies.Count; i < activeEnemyLimit; i++)
-                {
-                    SpawnEnemyAt(i);
-                }
+                InitializeBattleFlow();
 
                 RelocateOverlappingTanks();
             }
@@ -1457,76 +2157,79 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            ExecuteGameStep();
+        }
+
+        private void UpdateEnemyPlayerTargets()
+        {
+            if (firstPlayer)
+            {
+                EnemyEventArgs.player1X = player1.x;
+                EnemyEventArgs.player1Y = player1.y;
+                EnemyEventArgs.players = 1;
+            }
+            if (secondPlayer)
+            {
+                EnemyEventArgs.player2X = player2.x;
+                EnemyEventArgs.player2Y = player2.y;
+                EnemyEventArgs.players = 2;
+            }
+            if (firstPlayer && secondPlayer)
+            {
+                EnemyEventArgs.player1X = player1.x;
+                EnemyEventArgs.player1Y = player1.y;
+                EnemyEventArgs.player2X = player2.x;
+                EnemyEventArgs.player2Y = player2.y;
+                EnemyEventArgs.players = 3;
+            }
+            else if (!firstPlayer && !secondPlayer)
+            {
+                EnemyEventArgs.players = 0;
+            }
+        }
+
+        private void ExecuteGameStep()
+        {
+            grMemory.DrawImage(backgroundMain, 0, 0);
+            RebuildBulletBlockingBoxIndex();
             if (IsNetworkHost)
             {
                 ApplyRemoteInputToSecondPlayer();
             }
 
+            ProcessPlayerSkillInputs();
+            if (firstPlayer) player1.Move(this, null, player1.message, boxes, tanks, PlayerMovementStepsPerFrame);
+            if (secondPlayer) player2.Move(this, null, player2.message, boxes, tanks, PlayerMovementStepsPerFrame);
+            UpdateEnemyPlayerTargets();
+            if (MoveEnemy != null)
+            {
+                for (int i = 0; i < setting.speedEnemy; i++)
+                {
+                    MoveEnemy(this, boxes, bullets, tanks);
+                }
+            }
+            UpdateBattleFlow();
+            UpdateDamageTexts();
+            if (emergencySpawnCooldownTicks > 0)
+            {
+                emergencySpawnCooldownTicks--;
+            }
+
             ///////////////////////////////////////////////芯褌褉懈褋芯胁泻邪 薪懈卸薪械泄 锌邪薪械谢褜
 
-            int x = 150, y = 760;
-            for (int i = 0; i < setting.lifesPlayer1; i++)
+            DrawPlayerHealthBar(player1, firstPlayer, false, setting.lifesPlayer1);
+            if (setting.twoPlayer || networkMode)
             {
-                grMemory.DrawImage(heart, x, y, 25, 25);
-                x += 30;
-            }
-            if(setting.twoPlayer)
-            {
-                x = 530;
-                for (int i = 0; i < setting.lifesPlayer2; i++)
-                {
-                    grMemory.DrawImage(heart, x, y, 25, 25);
-                    x += 30;
-                }
+                DrawPlayerHealthBar(player2, secondPlayer, true, setting.lifesPlayer2);
             }
 
-            int countDegree = 0;
-            int numBuf;
-            int[] masNum = new int[10];
-            int bufPoints = setting.pointsPlayer1;
-
-            x = 255;
-
-            if (bufPoints == 0)
-                Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x, 760);
-            else
-                while(bufPoints != 0)
-                {
-                    numBuf = bufPoints % 10;
-                    masNum[countDegree] = numBuf;
-                    bufPoints /= 10;
-                    countDegree++;
-                }
-
-            for (int i = countDegree - 1; i >= 0; i--)
-            {
-                Numbers.Draw(grMemory, Numbers.ReturnNumPic(masNum[i]), x, 760);
-                x += 30;
-            }
+            int hudNumberX = ClientSize.Width - 360;
+            int hudNumberY = ClientSize.Height - 36;
+            DrawNumber(setting.pointsPlayer1, hudNumberX, hudNumberY);
 
             if(setting.twoPlayer)
             {
-                countDegree = 0;
-                bufPoints = setting.pointsPlayer2;
-
-                x = 633;
-
-                if (bufPoints == 0)
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x, 760);
-                else
-                    while (bufPoints != 0)
-                    {
-                        numBuf = bufPoints % 10;
-                        masNum[countDegree] = numBuf;
-                        bufPoints /= 10;
-                        countDegree++;
-                    }
-
-                for (int i = countDegree - 1; i >= 0; i--)
-                {
-                    Numbers.Draw(grMemory, Numbers.ReturnNumPic(masNum[i]), x, 760);
-                    x += 30;
-                }
+                DrawNumber(setting.pointsPlayer2, hudNumberX, ClientSize.Height - 72);
             }
 
             /////////////////////////////////////////////////////褋锌邪胁薪 斜芯褌芯胁
@@ -1535,135 +2238,76 @@ namespace Peace_of_Tanks
                 DrawKillHud(player1Kills, player2Kills);
             }
 
-            if (!ShouldKeepEnemyCountStable() && timeSpawn == 0 && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
+            if (IsSurvivalBattle)
             {
-                Random random = new Random();
-                bool[] mas = new bool[4] { false, false, false, false };
-                int num = random.Next(0, 4);
+                DrawSurvivalHud();
+            }
 
-                for (int i = 0; i < tanks.Count; i++)
-                    for (int j = 0; j < 3; j++)
-                        if (Collisions.check_touch(level.masPointsSpawnEnemy[j, 0], level.masPointsSpawnEnemy[j, 1], tanks[i].x, tanks[i].y))
-                            mas[j] = true;
+            if (battleBannerTicks > 0 && !string.IsNullOrEmpty(battleBannerText))
+            {
+                DrawBattleBanner(battleBannerText);
+            }
 
-                num = random.Next(0, 4);
-                if (mas[0] == true && mas[1] == true && mas[2] == true)
+            DrawBossHealthBar();
+            DrawDamageTexts();
+            DrawSkillHud();
+
+            if (!ShouldKeepEnemyCountStable() && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
+            {
+                if (enemies.Count == 0 && emergencySpawnCooldownTicks <= 0)
                 {
-                    timeSpawn = setting.timeSpawn;
+                    if (TryEmergencySpawnEnemy())
+                    {
+                        timeSpawn = Math.Min(setting.timeSpawn, GameTiming.ScaleLegacyTicks(20));
+                    }
+                }
+                else if (timeSpawn <= 0)
+                {
+                    bool[] mas = new bool[4] { false, false, false, false };
+                    int num = random.Next(0, 4);
+
+                    for (int i = 0; i < tanks.Count; i++)
+                        for (int j = 0; j < 3; j++)
+                            if (Collisions.check_touch(level.masPointsSpawnEnemy[j, 0], level.masPointsSpawnEnemy[j, 1], tanks[i].x, tanks[i].y))
+                                mas[j] = true;
+
+                    num = random.Next(0, 4);
+                    if (mas[0] == true && mas[1] == true && mas[2] == true)
+                    {
+                        timeSpawn = Math.Min(setting.timeSpawn, GameTiming.ScaleLegacyTicks(20));
+                    }
+                    else
+                    {
+                        while (mas[num] == true)
+                        {
+                            num = random.Next(0, 4);
+                        }
+
+                        try
+                        {
+                            SpawnEnemyAt(num);
+                            timeSpawn = setting.timeSpawn;
+                        }
+                        catch
+                        {
+                            timeSpawn = Math.Min(setting.timeSpawn, GameTiming.ScaleLegacyTicks(24));
+                        }
+                    }
                 }
                 else
                 {
-                    while (mas[num] == true)
-                    {
-                        num = random.Next(0, 4);
-                    }
-
-                    SpawnEnemyAt(num);
-
-                    timeSpawn = setting.timeSpawn;
+                    timeSpawn--;
                 }
             }
-            else
+            else if (timeSpawn > 0)
+            {
                 timeSpawn--;
+            }
 
             //////////////////////////////////////////////锌褉芯胁械褉泻邪 褋褌芯谢泻薪芯胁械薪懈泄
             for (int i = 0; i < bullets.Count; i++) //锌褉芯胁械褉泻邪 褋褌芯谢泻薪芯胁械薪懈褟 锌褍谢褜 懈 褟褖懈泻芯胁
             {
                 bool bulletDeath = HandleBulletCollision(i);
-                for (int j = 0; j < boxes.Count; j++)
-                {
-                    if (!bulletDeath && Collisions.check_touch(this, bullets[i], boxes[j]) == 2)
-                    {
-                        boxes[j].hitPoint--;
-                        AddHitEffect(boxes[j].x, boxes[j].y);
-                        if (boxes[j].hitPoint == 0)
-                        {
-                            MarkBaseDestroyed(boxes[j]);
-
-                            boxes.RemoveAt(j);
-                        }
-                        bullets.RemoveAt(i);
-
-                        bulletDeath = true;
-
-                        break;
-                    }
-                    else if (!bulletDeath && Collisions.check_touch(this, bullets[i], boxes[j]) == 1)
-                    {
-                        AddHitEffect(boxes[j].x, boxes[j].y);
-                        bullets.RemoveAt(i);
-                        bulletDeath = true;
-
-                        break;
-                    }
-                }
-
-                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋 斜芯褌邪屑懈
-                for(int j = 0; j < enemies.Count; j++)
-                {
-                    if(!bulletDeath && Collisions.check_touch(bullets[i], enemies[j]) )
-                    {
-                        if (bullets[i].who == 1)
-                            setting.pointsPlayer1 += setting.pointsForEnemy;
-                        else if (bullets[i].who == 2)
-                            setting.pointsPlayer2 += setting.pointsForEnemy;
-
-                        if (bullets[i].who != 0)
-                        {
-                            AddHitEffect(enemies[j].x, enemies[j].y);
-                            TrackDamage(bullets[i].who, bullets[i].damage);
-                            enemies[j].hitpoints -= bullets[i].damage;  // 使用子弹伤害
-                            if (enemies[j].hitpoints <= 0)
-                            {
-                                RegisterEnemyKill(bullets[i].who);
-                            }
-                            bullets.RemoveAt(i);
-                            bulletDeath = true;
-
-                            break;
-                        }
-                    }
-                }
-
-                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋 1 懈谐褉芯泻芯屑
-                if (!bulletDeath && firstPlayer && bullets[i].who != 1 && Collisions.check_touch(bullets[i], player1))
-                {
-                    if(bullets[i].who == 2)
-                    {
-                        setting.pointsPlayer2 += setting.pointsForPlayers;
-                    }
-
-                    AddHitEffect(player1.x, player1.y);
-                    TrackDamage(bullets[i].who, bullets[i].damage);
-                    player1.hitpoints -= bullets[i].damage;  // 使用子弹伤害
-                    if (player1.hitpoints <= 0 && bullets[i].who == 2)
-                    {
-                        player2Kills++;
-                    }
-                    bullets.RemoveAt(i);
-                    bulletDeath = true;
-                }
-
-                //褋褌芯谢泻薪芯胁械薪懈械 锌褍谢褜 褋芯 2 懈谐褉芯泻芯屑
-                if (!bulletDeath && secondPlayer && bullets[i].who != 2 && Collisions.check_touch(bullets[i], player2))
-                {
-                    if (bullets[i].who == 1)
-                    {
-                        setting.pointsPlayer1 += setting.pointsForPlayers;
-                    }
-
-                    AddHitEffect(player2.x, player2.y);
-                    TrackDamage(bullets[i].who, bullets[i].damage);
-                    player2.hitpoints -= bullets[i].damage;  // 使用子弹伤害
-                    if (player2.hitpoints <= 0 && bullets[i].who == 1)
-                    {
-                        player1Kills++;
-                    }
-                    bullets.RemoveAt(i);
-                    bulletDeath = true;
-                }
-
-                //写胁懈卸械薪懈械 锌褍谢懈
                 if (!bulletDeath)
                 {
                     int stepCount = bullets[i].MoveStepCount;
@@ -1684,16 +2328,11 @@ namespace Peace_of_Tanks
                 }
             }
 
+            RemoveDefeatedEnemies();
+
             //蟹邪写械褉卸泻邪 芯褌褉懈褋芯胁泻懈 邪薪懈屑邪褑懈懈  (写械谢械谐邪褌)
             if(DelayEvent != null)
                 DelayEvent(); 
-
-            //写胁懈卸械薪懈械 斜芯褌芯胁
-            if (MoveEnemy != null)
-            {
-                for (int i = 0; i < setting.speedEnemy; i++)
-                    MoveEnemy(this, boxes, bullets, tanks);
-            };
 
             /////////////////////////////////////// 芯褌褉懈褋芯胁泻邪
 
@@ -1708,11 +2347,21 @@ namespace Peace_of_Tanks
             }
             for (int i = 0; i < enemies.Count; i++) //芯褌褉懈褋芯胁泻邪 斜芯褌芯胁
             {
-                enemies[i].Draw(grMemory);
+                int enemySize = enemies[i].IsBossEntity ? 74 : 50;
+                if (enemies[i].IsBossEntity)
+                {
+                    BaseTank.DrawGlow(grMemory, enemies[i].x, enemies[i].y, enemySize, enemySize, Color.FromArgb(180, 120, 60, 220));
+                    DrawRotatedImage(grMemory, enemies[i].CurrentPicture, enemies[i].x, enemies[i].y, enemySize, enemySize, enemies[i].RotationDegrees);
+                }
+                else
+                {
+                    enemies[i].Draw(grMemory, Color.Empty);
+                }
             }
 
             if (firstPlayer) player1.Draw(grMemory, Color.FromArgb(80, 235, 120));                    // 芯褌褉懈褋芯胁泻邪 褌邪薪泻芯胁 懈谐褉芯泻芯胁
             if (secondPlayer) player2.Draw(grMemory, networkMode ? Color.FromArgb(255, 82, 82) : Color.Empty);
+            DrawActorWorldHealthBars();
 
             for (int i = 0; i < boxes.Count; i++) // 芯褌褉懈褋芯胁泻邪 谢械褋薪褘褏 褟褖懈泻芯胁, 锌芯蟹卸械 芯褌褉懈褋芯胁泻懈 褌邪薪泻芯胁, 褔褌芯斜褘 褌邪薪泻 屑芯谐 锌褉褟褌邪褌褜褋褟 胁 谢械褋褍
             {
@@ -1725,18 +2374,23 @@ namespace Peace_of_Tanks
 
             ////////////////////////////////////////////////////////////////////////锌褉芯胁械褉泻邪 泻芯薪褑邪 懈谐褉褘
 
-            bool freeBattleFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.FreeBattle && (player1Kills >= 15 || player2Kills >= 15);
-            bool baseDefenseFinished = launchOptions != null && launchOptions.BattleRule == BattleRuleMode.BaseDefense && baseDestroyed;
-            bool singlePlayerCleared = currentGameMode == GameMode.SinglePlayer && setting.countEnemies <= 0 && enemies.Count == 0;
-            bool networkLastPlayerStanding = networkMode && CountActiveNetworkPlayers() <= 1;
+            bool versusFinished = IsVersusBattle && (player1Kills >= 10 || player2Kills >= 10);
+            bool survivalCleared = IsSurvivalBattle && survivalVictoryAchieved;
+            bool networkVersusFinished = networkMode && IsVersusBattle && CountActiveNetworkPlayers() <= 1;
+            bool networkCoopFailed = networkMode && IsSurvivalBattle && CountActiveNetworkPlayers() == 0;
 
             bool lifeLimitFinished = !networkMode && ((setting.lifesPlayer1 == 0 && !setting.twoPlayer) || ((setting.lifesPlayer2 == 0  && setting.lifesPlayer1 == 0) && setting.twoPlayer));
+            if ((networkCoopFailed || (lifeLimitFinished && IsSurvivalBattle)) && string.IsNullOrEmpty(survivalResultText))
+            {
+                survivalResultText = networkMode ? "协作失败：双方已全部被击破" : "挑战失败：生命耗尽";
+                ShowBattleBanner(networkMode ? "协作失败" : "挑战失败");
+            }
 
             if (lifeLimitFinished
-                || freeBattleFinished || baseDefenseFinished || networkLastPlayerStanding
-                || singlePlayerCleared)
+                || versusFinished || networkVersusFinished || networkCoopFailed
+                || survivalCleared)
             {
-                if (!singlePlayerCleared)
+                if (!survivalCleared)
                 {
                     gameoverY = Math.Min(140, gameoverY + 24);
                     grMemory.DrawImage(gameover, gameoverX, gameoverY);
@@ -1771,9 +2425,6 @@ namespace Peace_of_Tanks
 
                     PicturePlayer1_.Visible = picturePlayer2_.Visible = false;
 
-                    MovePlayer1 -= player1.Move;
-                    MovePlayer2 -= player2.Move;
-
                     List<PlayerResultSnapshot> settlementResults = BuildSettlementResults();
                     if (IsNetworkHost)
                     {
@@ -1786,21 +2437,12 @@ namespace Peace_of_Tanks
                 }
             }
 
-            grMain.DrawImage(backgroundMemory, 0, 0);
-            grMemory.DrawImage(backgroundMain, 0, 0);
-
             ////////////////////////////////////////////////////////////// 谢芯谐懈泻邪
 
             ProcessPlayerFireInputs();
 
             if (player1.message.pauseSpace > 0) player1.message.pauseSpace--;                    // 锌邪褍蟹邪 屑械卸写褍 胁褘褋褌褉械谢邪屑懈 褍 懈谐褉芯泻芯胁
             if (secondPlayer && player2.message.pauseSpace > 0) player2.message.pauseSpace--;     //
-
-            for (int i = 0; i < 8; i++)                                                         // 写胁懈卸械薪懈械 褌邪薪泻芯胁(胁薪褍褌褉懈 锌褉芯胁械褉泻邪 薪邪 褋芯锌褉懈泻芯褋薪芯胁械薪懈褟 褌邪薪泻芯胁)
-            {
-                if (firstPlayer) MovePlayer1(this, null, player1.message, boxes, tanks);
-                if (secondPlayer) MovePlayer2(this, null, player2.message, boxes, tanks);
-            }
 
             {
                 if (firstPlayer)                                               //褋芯芯斜褖械薪懈械 泻褌芯 械褋褌褜 胁 懈谐褉械 (褌芯谢褜泻 1 懈谢懈 2 懈谐褉芯泻, 芯斜邪, 懈谢懈 薪懈泻芯谐芯)
@@ -1827,20 +2469,7 @@ namespace Peace_of_Tanks
                     EnemyEventArgs.players = 0;
             }
 
-            for (int i = 0; i < enemies.Count; i++)                           //褍薪懈褔褌芯卸械薪懈械 胁褉邪谐芯胁 锌褉懈 褏锌 = 0
-            {
-                if(enemies[i].hitpoints <= 0)
-                {
-                    EnemyTank defeatedEnemy = enemies[i];
-                    AddExplosionEffect(defeatedEnemy.x, defeatedEnemy.y);
-
-                    MoveEnemy -= defeatedEnemy.Move;
-                    tanks.Remove(defeatedEnemy);
-                    enemies.RemoveAt(i);
-                    i--;
-                    RefillEnemiesIfNeeded();
-                }
-            }
+            RemoveDefeatedEnemies();
 
             if (secondPlayer && player2.hitpoints <= 0)  // 褍薪懈褔褌芯卸械薪懈械 胁褌芯褉芯谐芯 懈谐褉芯泻邪
             {
@@ -1851,8 +2480,7 @@ namespace Peace_of_Tanks
                 player2Deaths++;
                 AddExplosionEffect(player2.x, player2.y);
 
-                Random RanNum = new Random();
-                int num = RanNum.Next(0, 4);
+                int num = random.Next(0, 4);
                 if (networkMode || setting.lifesPlayer2 > 0)
                 {
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player2));
@@ -1877,8 +2505,7 @@ namespace Peace_of_Tanks
                 player1Deaths++;
                 AddExplosionEffect(player1.x, player1.y);
 
-                Random RanNum = new Random();
-                int num = RanNum.Next(0, 4);
+                int num = random.Next(0, 4);
                 if (networkMode || setting.lifesPlayer1 > 0)
                 {
                     Point respawn = FindSafeSpawnPoint(level.masPointsSpawnPlayers[num, 0], level.masPointsSpawnPlayers[num, 1], tanks.Where(t => t != player1));
@@ -1907,6 +2534,9 @@ namespace Peace_of_Tanks
             {
                 BroadcastSnapshot(false);
             }
+
+            grMain.DrawImage(backgroundMemory, 0, 0);
+            grMemory.DrawImage(backgroundMain, 0, 0);
         }
 
         //薪邪褔邪谢褜薪邪褟 懈薪懈褑懈邪谢懈蟹邪褑懈褟
@@ -1918,9 +2548,25 @@ namespace Peace_of_Tanks
         {
         }
 
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (timerResolutionRaised)
+            {
+                timeEndPeriod(1);
+                timerResolutionRaised = false;
+            }
+
+            base.OnFormClosed(e);
+        }
+
         public MainWindow(GameLaunchOptions options)
         {
             InitializeComponent();
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            DoubleBuffered = true;
+            ResizeRedraw = true;
+            UpdateStyles();
+            timerResolutionRaised = timeBeginPeriod(1) == 0;
 
             launchOptions = options ?? new GameLaunchOptions();
             currentGameMode = launchOptions.Mode;
@@ -1935,6 +2581,7 @@ namespace Peace_of_Tanks
 
             grMain = CreateGraphics();
             grMemory = Graphics.FromImage(backgroundMemory);
+            ConfigureFrameGraphics(grMemory);
             grMemory.DrawImage(backgroundMain, 0, 0);
 
             // 使用选中的坦克类型创建玩家坦克
@@ -1949,10 +2596,14 @@ namespace Peace_of_Tanks
             var (tankImg1, tankImg2) = TankResourceLoader.GetPlayerTankImages(selectedTankType);
 
             player1 = new PlayerTank(tankImg1, tankImg2, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -100, -100, 2, health, attack);
+            player1.UseMouseAim = true;
             player1.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(playerTankData.SpeedLevel);
             player1.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(playerTankData.BulletSpeedLevel);
             player1.cooldownSeconds = TankConfig.GetCooldownSecondsAtLevel(playerTankData.CooldownLevel);
+            player1.ConfigureSkill(selectedTankType);
             player2 = new PlayerTank(new Bitmap(tankImg1), new Bitmap(tankImg2), ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan, -50, -50, 2, config.BaseHealth, config.BaseAttack);
+            player2.UseMouseAim = false;
+            player2.ConfigureSkill(selectedTankType);
 
             string statsPath = AppPaths.GetDataPath("stats.dat");
             if(File.Exists(statsPath))
@@ -1984,7 +2635,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            setting.twoPlayer = currentGameMode == GameMode.TwoPlayer;
+            setting.twoPlayer = currentGameMode != GameMode.SinglePlayer;
             ApplyDifficultySettings(launchOptions.Difficulty);
             StartBattleDirectly();
         }

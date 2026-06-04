@@ -411,7 +411,7 @@ namespace Peace_of_Tanks
             //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 800);
+            this.ClientSize = new System.Drawing.Size(1000, 740);
             this.Controls.Add(this.RichRules);
             this.Controls.Add(this.RichAbout);
             this.Controls.Add(this.PicBackToLobby);
@@ -453,6 +453,7 @@ namespace Peace_of_Tanks
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.MainWindow_KeyDown);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.MainWindow_KeyUp);
             this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.MainWindow_MouseDown);
+            this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.MainWindow_MouseMove);
             this.MouseUp += new System.Windows.Forms.MouseEventHandler(this.MainWindow_MouseUp);
             ((System.ComponentModel.ISupportInitialize)(this.PicAbout)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.PicRules)).EndInit();

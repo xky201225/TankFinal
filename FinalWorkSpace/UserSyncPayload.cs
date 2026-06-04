@@ -7,7 +7,16 @@ namespace Peace_of_Tanks
         public string UserName { get; set; } = string.Empty;
         public int TotalExp { get; set; }
         public int SelectedTank { get; set; }
+        public int HighestUnlockedStage { get; set; }
         public List<TankSyncPayload> Tanks { get; set; } = new List<TankSyncPayload>();
+        public List<StageRecordPayload> StageRecords { get; set; } = new List<StageRecordPayload>();
+    }
+
+    internal sealed class StageRecordPayload
+    {
+        public int StageId { get; set; }
+        public int BestScore { get; set; }
+        public int BestTimeSeconds { get; set; }
     }
 
     internal sealed class TankSyncPayload

@@ -213,12 +213,21 @@ namespace Peace_of_Tanks
         Cooldown
     }
 
+    public class StageRecord
+    {
+        public int StageId { get; set; }
+        public int BestScore { get; set; }
+        public int BestTimeSeconds { get; set; }
+    }
+
     public class PlayerData
     {
         public int UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public int TotalExp { get; set; } = 0;
+        public int HighestUnlockedStage { get; set; } = 1;
         public Dictionary<TankType, PlayerTankData> Tanks { get; set; }
+        public List<StageRecord> StageRecords { get; set; } = new List<StageRecord>();
         public TankType SelectedTank { get; set; } = TankType.Green;
 
         public PlayerData()
@@ -244,6 +253,17 @@ namespace Peace_of_Tanks
         public void AddExp(int exp)
         {
             TotalExp += exp;
+        }
+
+        public bool IsStageUnlocked(int stageId)
+        {
+            return stageId <= HighestUnlockedStage;
+        }
+
+        public void UnlockNextStage(int completedStageId)
+        {
+            HighestUnlockedStage = Math.Max(HighestUnlockedStage, completedStageId + 1);
+            HighestUnlockedStage = Math.Min(3, HighestUnlockedStage);
         }
 
         public bool UpgradeTank(TankType type, TankUpgradeType upgradeType)
@@ -345,8 +365,8 @@ namespace Peace_of_Tanks
     public enum GameMode
     {
         SinglePlayer,
-        TwoPlayer,
-        ThreePlayer
+        NetworkVersus,
+        NetworkCoop
     }
 
     public static class DataManager
@@ -428,10 +448,10 @@ namespace Peace_of_Tanks
             {
                 case GameMode.SinglePlayer:
                     return 10;
-                case GameMode.TwoPlayer:
+                case GameMode.NetworkVersus:
                     return rank == 1 ? 15 : 10;
-                case GameMode.ThreePlayer:
-                    return rank == 1 ? 15 : (rank == 2 ? 10 : 5);
+                case GameMode.NetworkCoop:
+                    return rank == 1 ? 15 : 12;
                 default:
                     return 0;
             }
@@ -528,8 +548,19 @@ namespace Peace_of_Tanks
             {
                 UserName = playerData.UserName,
                 TotalExp = playerData.TotalExp,
-                SelectedTank = (int)playerData.SelectedTank
+                SelectedTank = (int)playerData.SelectedTank,
+                HighestUnlockedStage = playerData.HighestUnlockedStage
             };
+
+            foreach (StageRecord stageRecord in playerData.StageRecords)
+            {
+                payload.StageRecords.Add(new StageRecordPayload
+                {
+                    StageId = stageRecord.StageId,
+                    BestScore = stageRecord.BestScore,
+                    BestTimeSeconds = stageRecord.BestTimeSeconds
+                });
+            }
 
             foreach (KeyValuePair<TankType, PlayerTankData> pair in playerData.Tanks)
             {
@@ -568,6 +599,17 @@ namespace Peace_of_Tanks
             playerData.UserName = payload.UserName ?? string.Empty;
             playerData.TotalExp = payload.TotalExp;
             playerData.SelectedTank = ParseTankType(payload.SelectedTank);
+            playerData.HighestUnlockedStage = Math.Max(1, Math.Min(3, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage));
+            playerData.StageRecords = new List<StageRecord>();
+            foreach (StageRecordPayload record in payload.StageRecords ?? new List<StageRecordPayload>())
+            {
+                playerData.StageRecords.Add(new StageRecord
+                {
+                    StageId = record.StageId,
+                    BestScore = record.BestScore,
+                    BestTimeSeconds = record.BestTimeSeconds
+                });
+            }
 
             foreach (TankSyncPayload tank in payload.Tanks ?? new List<TankSyncPayload>())
             {

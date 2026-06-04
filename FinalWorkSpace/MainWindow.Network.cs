@@ -360,13 +360,17 @@ namespace Peace_of_Tanks
                 ApplyNetworkPlayerTankImages();
                 ApplyDifficultySettings(activeNetworkConfig != null ? activeNetworkConfig.Difficulty : NetworkDifficulty.Easy);
                 setting.twoPlayer = true;
-                networkStatusLabel.Text = "联机已匹配成功，你是主机端，负责同步游戏状态。";
+                networkStatusLabel.Text = activeNetworkConfig != null && activeNetworkConfig.BattleRule == BattleRuleMode.Survival
+                    ? "联机协作已匹配成功：击败所有波次并消灭最终Boss。你是主机端，负责同步敌人与战场状态。"
+                    : "联机竞技已匹配成功：先达成10次击杀即可获胜。你是主机端，负责同步对战状态。";
                 StartBattleDirectly();
             }
             else
             {
                 setting.twoPlayer = true;
-                networkStatusLabel.Text = "联机已匹配成功，你是副机端，等待主机同步状态...";
+                networkStatusLabel.Text = activeNetworkConfig != null && activeNetworkConfig.BattleRule == BattleRuleMode.Survival
+                    ? "联机协作已匹配成功：目标是清空波次并击败最终Boss。你是副机端，等待主机同步战场状态..."
+                    : "联机竞技已匹配成功：先达成10次击杀即可获胜。你是副机端，等待主机同步对战状态...";
                 modeMenu = 8;
                 timer1.Interval = GameTiming.TimerIntervalMs;
                 timer1.Enabled = true;
@@ -379,52 +383,53 @@ namespace Peace_of_Tanks
 
         private void ApplyDifficultySettings(NetworkDifficulty difficulty)
         {
+            bool survivalMode = IsSurvivalBattle;
             if (difficulty == NetworkDifficulty.Easy)
             {
                 setting.difficulty = 0;
-                setting.countEnemies = 15;
-                activeEnemyLimit = 3;
+                setting.countEnemies = survivalMode ? 15 : 0;
+                activeEnemyLimit = survivalMode ? 3 : 0;
                 setting.hitPointsEnemy = 1;
                 setting.level = 1;
                 setting.lifesPlayer1 = 3;
                 setting.lifesPlayer2 = 3;
                 setting.pointsPlayer1 = 0;
                 setting.pointsPlayer2 = 0;
-                setting.speedEnemy = 2;
+                setting.speedEnemy = survivalMode ? 2 : 0;
                 setting.pointsForEnemy = 80;
-                setting.timeSpawn = GameTiming.ScaleLegacyTicks(300);
+                setting.timeSpawn = survivalMode ? GameTiming.ScaleLegacyTicks(300) : 0;
                 setting.pointsForPlayers = 500;
             }
             else if (difficulty == NetworkDifficulty.Medium)
             {
                 setting.difficulty = 1;
-                setting.countEnemies = 25;
-                activeEnemyLimit = 5;
+                setting.countEnemies = survivalMode ? 25 : 0;
+                activeEnemyLimit = survivalMode ? 5 : 0;
                 setting.hitPointsEnemy = 1;
                 setting.level = 1;
                 setting.lifesPlayer1 = 2;
                 setting.lifesPlayer2 = 2;
                 setting.pointsPlayer1 = 0;
                 setting.pointsPlayer2 = 0;
-                setting.speedEnemy = 4;
+                setting.speedEnemy = survivalMode ? 4 : 0;
                 setting.pointsForEnemy = 90;
-                setting.timeSpawn = GameTiming.ScaleLegacyTicks(100);
+                setting.timeSpawn = survivalMode ? GameTiming.ScaleLegacyTicks(100) : 0;
                 setting.pointsForPlayers = 750;
             }
             else
             {
                 setting.difficulty = 2;
-                setting.countEnemies = 50;
-                activeEnemyLimit = 8;
+                setting.countEnemies = survivalMode ? 50 : 0;
+                activeEnemyLimit = survivalMode ? 8 : 0;
                 setting.hitPointsEnemy = 2;
                 setting.level = 1;
                 setting.lifesPlayer1 = 1;
                 setting.lifesPlayer2 = 1;
                 setting.pointsPlayer1 = 0;
                 setting.pointsPlayer2 = 0;
-                setting.speedEnemy = 5;
+                setting.speedEnemy = survivalMode ? 5 : 0;
                 setting.pointsForEnemy = 100;
-                setting.timeSpawn = GameTiming.ScaleLegacyTicks(50);
+                setting.timeSpawn = survivalMode ? GameTiming.ScaleLegacyTicks(50) : 0;
                 setting.pointsForPlayers = 1000;
             }
         }
@@ -475,6 +480,11 @@ namespace Peace_of_Tanks
                 input.isSpace = pressed;
                 return true;
             }
+            if (key == Keys.E)
+            {
+                input.isSkill = pressed;
+                return true;
+            }
             return false;
         }
 
@@ -505,6 +515,11 @@ namespace Peace_of_Tanks
                 input.Fire = pressed;
                 return true;
             }
+            if (key == Keys.E)
+            {
+                input.Skill = pressed;
+                return true;
+            }
             return false;
         }
 
@@ -531,6 +546,9 @@ namespace Peace_of_Tanks
             player2.message.isLeft = remoteInputState.Left;
             player2.message.isRight = remoteInputState.Right;
             player2.message.isSpace = remoteInputState.Fire;
+            player2.message.isSkill = remoteInputState.Skill;
+            player2.UseMouseAim = true;
+            player2.SetRotationDegrees(remoteInputState.AimAngleDegrees);
         }
 
         private void ProcessPlayerFireInputs()
@@ -554,9 +572,19 @@ namespace Peace_of_Tanks
                 return false;
             }
 
-            player.nextFireAvailableAtUtc = now.AddSeconds(player.cooldownSeconds);
+            player.nextFireAvailableAtUtc = now.AddSeconds(player.GetCurrentCooldownSeconds());
             player.message.pauseSpace = 0;
-            bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.direction, who, player.attack, player.bulletSpeedMultiplier));
+            int attack = player.GetCurrentAttack();
+            if (player.ConsumeBarrageShot())
+            {
+                bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.RotationDegrees - 12f, who, attack, player.bulletSpeedMultiplier));
+                bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.RotationDegrees, who, attack, player.bulletSpeedMultiplier));
+                bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.RotationDegrees + 12f, who, attack, player.bulletSpeedMultiplier));
+            }
+            else
+            {
+                bullets.Add(new Bullet(player.pictureBullet, player.x, player.y, player.RotationDegrees, who, attack, player.bulletSpeedMultiplier));
+            }
             return true;
         }
 
@@ -592,8 +620,14 @@ namespace Peace_of_Tanks
                 KillsPlayer1 = player1Kills,
                 KillsPlayer2 = player2Kills,
                 EnemiesLeft = setting.countEnemies,
+                SurvivalWave = survivalWave,
+                WaveEnemiesLeft = Math.Max(0, setting.countEnemies),
+                SurvivalBossWave = survivalBossWaveActive,
+                SurvivalVictory = survivalVictoryAchieved,
+                BattleBannerTicks = battleBannerTicks,
                 GameOver = gameOver,
-                StatusText = gameOver ? "主机端已结束本局游戏。" : "联机中：已同步主机画面"
+                StatusText = gameOver ? "主机端已结束本局游戏。" : GetBattleStatusText(),
+                BattleBannerText = battleBannerText ?? string.Empty
             };
 
             snapshot.Player1 = new TankSnapshot
@@ -601,7 +635,9 @@ namespace Peace_of_Tanks
                 X = player1.x,
                 Y = player1.y,
                 Direction = player1.direction,
+                RotationDegrees = player1.RotationDegrees,
                 HitPoints = player1.hitpoints,
+                MaxHitPoints = player1.maxHitpoints,
                 Active = firstPlayer,
                 Kind = 1,
                 TankType = (int)networkPlayer1TankType
@@ -611,7 +647,9 @@ namespace Peace_of_Tanks
                 X = player2.x,
                 Y = player2.y,
                 Direction = player2.direction,
+                RotationDegrees = player2.RotationDegrees,
                 HitPoints = player2.hitpoints,
+                MaxHitPoints = player2.maxHitpoints,
                 Active = secondPlayer,
                 Kind = 2,
                 TankType = (int)networkPlayer2TankType
@@ -624,7 +662,9 @@ namespace Peace_of_Tanks
                     X = enemies[i].x,
                     Y = enemies[i].y,
                     Direction = enemies[i].direction,
+                    RotationDegrees = enemies[i].RotationDegrees,
                     HitPoints = enemies[i].hitpoints,
+                    MaxHitPoints = enemies[i].maxHitpoints,
                     Active = true,
                     Kind = 3,
                     TankType = (int)enemies[i].TankType
@@ -638,7 +678,9 @@ namespace Peace_of_Tanks
                     X = bullets[i].x,
                     Y = bullets[i].y,
                     Direction = GetBulletDirection(bullets[i]),
-                    Who = bullets[i].who
+                    RotationDegrees = bullets[i].RotationDegrees,
+                    Who = bullets[i].who,
+                    IsBoss = bullets[i].DrawSize > 10
                 });
             }
 
@@ -660,6 +702,18 @@ namespace Peace_of_Tanks
                     Y = animations[i].message.y,
                     Type = animations[i].message.type,
                     Delay = animations[i].message.delay
+                });
+            }
+
+            for (int i = 0; i < damageTexts.Count; i++)
+            {
+                snapshot.DamageTexts.Add(new DamageTextSnapshot
+                {
+                    X = (int)damageTexts[i].X,
+                    Y = (int)damageTexts[i].Y,
+                    Value = damageTexts[i].Value,
+                    IsPlayerTarget = damageTexts[i].IsPlayerTarget,
+                    Ticks = damageTexts[i].Ticks
                 });
             }
 
@@ -709,28 +763,32 @@ namespace Peace_of_Tanks
 
             for (int i = 0; i < snapshot.Bullets.Count; i++)
             {
+                int bulletSize = snapshot.Bullets[i].IsBoss ? 20 : 14;
                 DrawRotatedImage(grMemory, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan,
-                    snapshot.Bullets[i].X, snapshot.Bullets[i].Y, 10, 10, snapshot.Bullets[i].Direction);
+                    snapshot.Bullets[i].X, snapshot.Bullets[i].Y, bulletSize, bulletSize, snapshot.Bullets[i].RotationDegrees);
             }
 
             for (int i = 0; i < snapshot.Enemies.Count; i++)
             {
+                int enemySize = snapshot.Enemies[i].MaxHitPoints >= 180 ? 74 : 50;
                 DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Enemies[i]),
-                    snapshot.Enemies[i].X, snapshot.Enemies[i].Y, 50, 50, snapshot.Enemies[i].Direction);
+                    snapshot.Enemies[i].X, snapshot.Enemies[i].Y, enemySize, enemySize, snapshot.Enemies[i].RotationDegrees);
             }
+
+            DrawSnapshotWorldHealthBars(snapshot);
 
             if (snapshot.Player1.Active)
             {
                 DrawTankGlow(snapshot.Player1.X, snapshot.Player1.Y, IsNetworkGuest ? Color.FromArgb(255, 82, 82) : Color.FromArgb(80, 235, 120));
                 DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Player1),
-                    snapshot.Player1.X, snapshot.Player1.Y, 50, 50, snapshot.Player1.Direction);
+                    snapshot.Player1.X, snapshot.Player1.Y, 50, 50, snapshot.Player1.RotationDegrees);
             }
 
             if (snapshot.Player2.Active)
             {
                 DrawTankGlow(snapshot.Player2.X, snapshot.Player2.Y, IsNetworkGuest ? Color.FromArgb(80, 235, 120) : Color.FromArgb(255, 82, 82));
                 DrawRotatedImage(grMemory, GetTankSnapshotImage(snapshot.Player2),
-                    snapshot.Player2.X, snapshot.Player2.Y, 50, 50, snapshot.Player2.Direction);
+                    snapshot.Player2.X, snapshot.Player2.Y, 50, 50, snapshot.Player2.RotationDegrees);
             }
 
             for (int i = 0; i < snapshot.Boxes.Count; i++)
@@ -754,52 +812,103 @@ namespace Peace_of_Tanks
 
             grMain.DrawImage(backgroundMemory, 0, 0);
             grMemory.DrawImage(backgroundMain, 0, 0);
+
         }
 
         private void DrawSnapshotHud(GameSnapshot snapshot)
         {
-            int x = 150;
-            int y = 760;
-            for (int i = 0; i < snapshot.LivesPlayer1; i++)
-            {
-                grMemory.DrawImage(heart, x, y, 25, 25);
-                x += 30;
-            }
+            player1.hitpoints = snapshot.Player1.HitPoints;
+            player1.maxHitpoints = Math.Max(player1.maxHitpoints, snapshot.Player1.HitPoints);
+            player2.hitpoints = snapshot.Player2.HitPoints;
+            player2.maxHitpoints = Math.Max(player2.maxHitpoints, snapshot.Player2.HitPoints);
+            DrawPlayerHealthBar(player1, snapshot.Player1.Active, false, snapshot.LivesPlayer1);
+            DrawPlayerHealthBar(player2, snapshot.Player2.Active, true, snapshot.LivesPlayer2);
 
-            x = 530;
-            for (int i = 0; i < snapshot.LivesPlayer2; i++)
+            if (snapshot.SurvivalBossWave && snapshot.Enemies.Count > 0)
             {
-                grMemory.DrawImage(heart, x, y, 25, 25);
-                x += 30;
+                TankSnapshot boss = snapshot.Enemies.OrderByDescending(enemy => enemy.HitPoints).FirstOrDefault();
+                if (boss != null)
+                {
+                    float width = Math.Min(520f, ClientSize.Width * 0.48f);
+                    float x = (ClientSize.Width - width) / 2f;
+                    float y = 16f;
+                    float ratio = boss.MaxHitPoints <= 0 ? 0f : Math.Max(0f, Math.Min(1f, boss.HitPoints / (float)boss.MaxHitPoints));
+                    using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(190, 25, 18, 22)))
+                    using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(186, 72, 210)))
+                    using (Pen borderPen = new Pen(Color.FromArgb(255, 240, 220, 120), 2f))
+                    {
+                        grMemory.FillRectangle(backBrush, x, y, width, 18f);
+                        grMemory.FillRectangle(fillBrush, x + 2f, y + 2f, Math.Max(0f, (width - 4f) * ratio), 14f);
+                        grMemory.DrawRectangle(borderPen, x, y, width, 18f);
+                    }
+
+                    string bossText = "Boss " + Math.Max(0, boss.HitPoints) + "/" + Math.Max(1, boss.MaxHitPoints);
+                    SizeF bossSize = grMemory.MeasureString(bossText, battleHudFont);
+                    grMemory.DrawString(bossText, battleHudFont, Brushes.White, x + (width - bossSize.Width) / 2f, y - 20f);
+                }
             }
 
             DrawNumber(snapshot.PointsPlayer1, 255, 760);
             DrawNumber(snapshot.PointsPlayer2, 633, 760);
             DrawKillHud(snapshot.KillsPlayer1, snapshot.KillsPlayer2);
+            DrawSurvivalHud(snapshot.SurvivalWave, snapshot.WaveEnemiesLeft, snapshot.SurvivalBossWave, snapshot.SurvivalVictory);
+            if (snapshot.BattleBannerTicks > 0 && !string.IsNullOrEmpty(snapshot.BattleBannerText))
+            {
+                DrawBattleBanner(snapshot.BattleBannerText);
+            }
+
+            for (int i = 0; i < snapshot.DamageTexts.Count; i++)
+            {
+                Brush brush = snapshot.DamageTexts[i].IsPlayerTarget ? Brushes.OrangeRed : Brushes.Gold;
+                grMemory.DrawString("-" + snapshot.DamageTexts[i].Value, damageTextFont, Brushes.Black, snapshot.DamageTexts[i].X + 1, snapshot.DamageTexts[i].Y + 1);
+                grMemory.DrawString("-" + snapshot.DamageTexts[i].Value, damageTextFont, brush, snapshot.DamageTexts[i].X, snapshot.DamageTexts[i].Y);
+            }
+        }
+
+        private void DrawSnapshotWorldHealthBars(GameSnapshot snapshot)
+        {
+            for (int i = 0; i < snapshot.Enemies.Count; i++)
+            {
+                DrawWorldHealthBar(snapshot.Enemies[i].X + 5, snapshot.Enemies[i].Y - 10, 40, snapshot.Enemies[i].HitPoints, Math.Max(snapshot.Enemies[i].MaxHitPoints, 1), Color.FromArgb(226, 86, 86));
+            }
+
+            if (snapshot.Player1.Active)
+            {
+                DrawWorldHealthBar(snapshot.Player1.X + 5, snapshot.Player1.Y - 10, 40, snapshot.Player1.HitPoints, Math.Max(snapshot.Player1.MaxHitPoints, 1), Color.FromArgb(90, 220, 120));
+            }
+
+            if (snapshot.Player2.Active)
+            {
+                DrawWorldHealthBar(snapshot.Player2.X + 5, snapshot.Player2.Y - 10, 40, snapshot.Player2.HitPoints, Math.Max(snapshot.Player2.MaxHitPoints, 1), Color.FromArgb(90, 170, 255));
+            }
         }
 
         private void DrawNumber(int value, int x, int y)
         {
-            int[] digits;
+            DrawNumber(value, x, y, 30);
+        }
+
+        private void DrawNumber(int value, int x, int y, int spacing)
+        {
             if (value == 0)
             {
-                digits = new int[] { 0 };
-            }
-            else
-            {
-                List<int> items = new List<int>();
-                while (value != 0)
-                {
-                    items.Insert(0, value % 10);
-                    value /= 10;
-                }
-                digits = items.ToArray();
+                Numbers.Draw(grMemory, Numbers.ReturnNumPic(0), x, y);
+                return;
             }
 
-            for (int i = 0; i < digits.Length; i++)
+            int divisor = 1;
+            while (value / divisor >= 10)
             {
-                Numbers.Draw(grMemory, Numbers.ReturnNumPic(digits[i]), x, y);
-                x += 30;
+                divisor *= 10;
+            }
+
+            while (divisor > 0)
+            {
+                int digit = value / divisor;
+                Numbers.Draw(grMemory, Numbers.ReturnNumPic(digit), x, y);
+                value %= divisor;
+                divisor /= 10;
+                x += spacing;
             }
         }
 
@@ -890,23 +999,16 @@ namespace Peace_of_Tanks
             tank.speedMultiplier = TankConfig.GetSpeedMultiplierAtLevel(speedLevel);
             tank.bulletSpeedMultiplier = TankConfig.GetBulletSpeedMultiplierAtLevel(bulletSpeedLevel);
             tank.cooldownSeconds = TankConfig.GetCooldownSecondsAtLevel(cooldownLevel);
+            tank.ConfigureSkill(tankType);
         }
 
-        private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, int direction)
+        private void DrawRotatedImage(Graphics graphics, Bitmap source, int x, int y, int width, int height, float angleDegrees)
         {
-            using (Bitmap image = new Bitmap(source))
-            {
-                image.MakeTransparent(Color.Black);
-                RotateBitmap(image, direction);
-                graphics.DrawImage(image, x, y, width, height);
-            }
-        }
-
-        private void RotateBitmap(Bitmap image, int direction)
-        {
-            if (direction == 0) image.RotateFlip(RotateFlipType.Rotate90FlipX);
-            if (direction == 1) image.RotateFlip(RotateFlipType.Rotate90FlipNone);
-            if (direction == 3) image.RotateFlip(RotateFlipType.Rotate180FlipNone);
+            var state = graphics.Save();
+            graphics.TranslateTransform(x + width / 2f, y + height / 2f);
+            graphics.RotateTransform(angleDegrees);
+            graphics.DrawImage(source, -width / 2f, -height / 2f, width, height);
+            graphics.Restore(state);
         }
 
         private void CopyInput(NetworkInputState from, NetworkInputState to)
@@ -916,6 +1018,8 @@ namespace Peace_of_Tanks
             to.Left = from.Left;
             to.Right = from.Right;
             to.Fire = from.Fire;
+            to.Skill = from.Skill;
+            to.AimAngleDegrees = from.AimAngleDegrees;
         }
 
         private void HideOverlayControls()
@@ -962,8 +1066,6 @@ namespace Peace_of_Tanks
             tanks.Clear();
             animations.Clear();
 
-            MovePlayer1 = null;
-            MovePlayer2 = null;
             MoveEnemy = null;
             DelayEvent = null;
 
@@ -982,8 +1084,10 @@ namespace Peace_of_Tanks
             player2.message.pauseSpace = 0;
             player1.nextFireAvailableAtUtc = DateTime.MinValue;
             player2.nextFireAvailableAtUtc = DateTime.MinValue;
-            remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = false;
-            guestInputState.Up = guestInputState.Down = guestInputState.Left = guestInputState.Right = guestInputState.Fire = false;
+            player1.ResetSkillState();
+            player2.ResetSkillState();
+            remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = remoteInputState.Skill = false;
+            guestInputState.Up = guestInputState.Down = guestInputState.Left = guestInputState.Right = guestInputState.Fire = guestInputState.Skill = false;
 
             RefreshBattleBackground();
             grMain.DrawImage(backgroundMemory, 0, 0);

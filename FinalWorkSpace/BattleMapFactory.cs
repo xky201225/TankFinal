@@ -15,6 +15,58 @@ namespace Peace_of_Tanks
             return "系统地图 " + (index + 1);
         }
 
+        public static string GetStageMapName(int stage)
+        {
+            switch (stage)
+            {
+                case 1: return "废墟前线";
+                case 2: return "钢铁水坝";
+                case 3: return "要塞核心";
+                default: return "废墟前线";
+            }
+        }
+
+        public static GameMapConfig CreateStageMap(int stage)
+        {
+            GameMapConfig map = CreateEmpty(GetStageMapName(stage));
+            switch (stage)
+            {
+                case 2:
+                    AddRect(map, MapTileType.Wall, 3, 4, 10, 2);
+                    AddRect(map, MapTileType.Wall, 19, 4, 10, 2);
+                    AddRect(map, MapTileType.Water, 12, 7, 8, 6);
+                    AddRect(map, MapTileType.Iron, 4, 16, 3, 10);
+                    AddRect(map, MapTileType.Iron, 25, 16, 3, 10);
+                    AddRect(map, MapTileType.Grass, 10, 18, 4, 8);
+                    AddRect(map, MapTileType.Grass, 18, 18, 4, 8);
+                    AddRect(map, MapTileType.Wall, 11, 27, 10, 2);
+                    break;
+                case 3:
+                    AddRect(map, MapTileType.Iron, 4, 4, 24, 2);
+                    AddRect(map, MapTileType.Iron, 4, 26, 24, 2);
+                    AddRect(map, MapTileType.Wall, 4, 8, 2, 16);
+                    AddRect(map, MapTileType.Wall, 26, 8, 2, 16);
+                    AddRect(map, MapTileType.Water, 12, 10, 8, 3);
+                    AddRect(map, MapTileType.Water, 12, 19, 8, 3);
+                    AddRect(map, MapTileType.Wall, 10, 14, 12, 4);
+                    AddRect(map, MapTileType.Grass, 7, 11, 3, 10);
+                    AddRect(map, MapTileType.Grass, 22, 11, 3, 10);
+                    AddRect(map, MapTileType.Base, 15, 15, 2, 2);
+                    break;
+                default:
+                    AddRect(map, MapTileType.Wall, 3, 5, 8, 2);
+                    AddRect(map, MapTileType.Wall, 21, 5, 8, 2);
+                    AddRect(map, MapTileType.Grass, 5, 12, 4, 8);
+                    AddRect(map, MapTileType.Grass, 23, 12, 4, 8);
+                    AddRect(map, MapTileType.Water, 12, 13, 8, 4);
+                    AddRect(map, MapTileType.Wall, 12, 22, 8, 2);
+                    AddRect(map, MapTileType.Iron, 14, 7, 4, 3);
+                    break;
+            }
+
+            return map;
+        }
+
         public static GameMapConfig CreateSystemMap(int index)
         {
             GameMapConfig map = CreateEmpty(GetSystemMapName(index));
@@ -114,7 +166,7 @@ namespace Peace_of_Tanks
 
         public static void ApplyMap(GameMapConfig map, List<Box> boxes)
         {
-            ApplyMap(map, boxes, BattleRuleMode.FreeBattle);
+            ApplyMap(map, boxes, BattleRuleMode.Versus);
         }
 
         public static void ApplyMap(GameMapConfig map, List<Box> boxes, BattleRuleMode battleRule)
@@ -145,10 +197,6 @@ namespace Peace_of_Tanks
                 }
             }
 
-            if (battleRule == BattleRuleMode.BaseDefense)
-            {
-                AddBaseDefenseSites(boxes);
-            }
         }
 
         public static MapTileType GetTile(GameMapConfig map, int x, int y)

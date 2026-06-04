@@ -6,6 +6,7 @@ namespace Peace_of_Tanks_Server
     public static class ServerPaths
     {
         private const string ProjectDirectoryName = "FinalWorkSpace_Server";
+        private const string ClientProjectDirectoryName = "FinalWorkSpace";
 
         public static string BaseDirectory
         {
@@ -24,22 +25,22 @@ namespace Peace_of_Tanks_Server
 
             while (directory != null)
             {
-                string directCandidate = Path.Combine(directory.FullName, relativePath);
-                if (File.Exists(directCandidate))
-                {
-                    return directCandidate;
-                }
-
                 string projectCandidate = Path.Combine(directory.FullName, ProjectDirectoryName, relativePath);
                 if (File.Exists(projectCandidate))
                 {
                     return projectCandidate;
                 }
 
+                string clientProjectCandidate = Path.Combine(directory.FullName, ClientProjectDirectoryName, relativePath);
+                if (File.Exists(clientProjectCandidate))
+                {
+                    return clientProjectCandidate;
+                }
+
                 directory = directory.Parent;
             }
 
-            return GetContentPath(relativeParts);
+            throw new FileNotFoundException("Could not find required content file.", relativePath);
         }
 
         public static string LocalDatabaseConnectionString
@@ -47,7 +48,7 @@ namespace Peace_of_Tanks_Server
             get
             {
                 string databasePath = FindContentPath("Database1.mdf");
-                return "Data Source=(LocalDB)\\MSSQLLocalDB;AttachDbFilename=" + databasePath + ";Integrated Security=True";
+                return "Data Source=(LocalDB)\\MSSQLLocalDB;Initial Catalog=PeaceOfTanksData;AttachDbFilename=" + databasePath + ";Integrated Security=True";
             }
         }
     }
