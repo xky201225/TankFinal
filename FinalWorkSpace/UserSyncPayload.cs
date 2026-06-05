@@ -17,6 +17,7 @@ namespace Peace_of_Tanks
         public int StageId { get; set; }
         public int BestScore { get; set; }
         public int BestTimeSeconds { get; set; }
+        public int Rank { get; set; }
     }
 
     internal sealed class TankSyncPayload

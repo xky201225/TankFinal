@@ -62,6 +62,10 @@ namespace Peace_of_Tanks
         private int survivalWave;
         private bool survivalBossWaveActive;
         private bool survivalVictoryAchieved;
+        private int currentStageId = 1;
+        private int stageScore;
+        private int stageDamageTaken;
+        private DateTime stageStartedAtUtc = DateTime.UtcNow;
         private int survivalWaveDelayTicks;
         private string battleBannerText = string.Empty;
         private int battleBannerTicks;
@@ -863,6 +867,7 @@ namespace Peace_of_Tanks
                     {
                         AddHitEffect(enemies[j].x, enemies[j].y);
                         TrackDamage(bullet.who, bullet.damage);
+                        stageScore += 120;
                         AddDamageText(enemies[j].x + 12, enemies[j].y, bullet.damage, false);
                         enemies[j].hitpoints -= bullet.damage;
                         PlayerTank enemyAttacker = bullet.who == 1 ? player1 : (bullet.who == 2 ? player2 : null);
@@ -894,6 +899,8 @@ namespace Peace_of_Tanks
 
                 AddHitEffect(player1.x, player1.y);
                 int player1DamageTaken = ApplyDamage(player1, bullet.damage);
+                stageDamageTaken += player1DamageTaken;
+                stageScore = Math.Max(0, stageScore - player1DamageTaken * 3);
                 TrackDamage(bullet.who, player1DamageTaken);
                 AddDamageText(player1.x + 12, player1.y, player1DamageTaken, true);
                 player1.hitpoints -= player1DamageTaken;
@@ -915,6 +922,8 @@ namespace Peace_of_Tanks
 
                 AddHitEffect(player2.x, player2.y);
                 int player2DamageTaken = ApplyDamage(player2, bullet.damage);
+                stageDamageTaken += player2DamageTaken;
+                stageScore = Math.Max(0, stageScore - player2DamageTaken * 3);
                 TrackDamage(bullet.who, player2DamageTaken);
                 AddDamageText(player2.x + 12, player2.y, player2DamageTaken, true);
                 player2.hitpoints -= player2DamageTaken;
@@ -1280,6 +1289,13 @@ namespace Peace_of_Tanks
 
         private int GetSurvivalWaveEnemyCount(int wave)
         {
+            if (!networkMode && currentGameMode == GameMode.SinglePlayer)
+            {
+                if (wave <= 1) return 5;
+                if (wave == 2) return 7;
+                if (wave == 3) return 10;
+            }
+
             int count = 6 + wave * 3 + setting.difficulty * 2;
             if (currentGameMode == GameMode.NetworkCoop || networkMode)
             {
@@ -1556,7 +1572,7 @@ namespace Peace_of_Tanks
 
             Label expGain = new Label
             {
-                Text = "本局经验 +" + lastSettlementExpGain,
+                Text = "本局金币 +" + lastSettlementExpGain + "   分数 " + stageScore,
                 Font = new Font("Microsoft YaHei UI", 15, FontStyle.Bold),
                 ForeColor = Color.FromArgb(255, 224, 146),
                 BackColor = Color.Transparent,
@@ -1633,7 +1649,20 @@ namespace Peace_of_Tanks
 
             PlayerResultSnapshot localResult = results.FirstOrDefault(r => r.Name == GetLocalSettlementName());
             int rank = localResult != null && localResult.Rank > 0 ? localResult.Rank : 1;
-            int exp = DataManager.RewardExp(currentGameMode, rank);
+            int elapsedSeconds = Math.Max(1, (int)(DateTime.UtcNow - stageStartedAtUtc).TotalSeconds);
+            int clearBonus = survivalVictoryAchieved ? Math.Max(0, 2500 - elapsedSeconds * 4) : 0;
+            int lowDamageBonus = Math.Max(0, 1200 - stageDamageTaken * 2);
+            int rankBonus = Math.Max(0, 600 - (rank - 1) * 180);
+            int finalScore = Math.Max(0, stageScore + clearBonus + lowDamageBonus + rankBonus);
+            if (survivalVictoryAchieved)
+            {
+                DataManager.CurrentPlayer.UnlockNextStage(currentStageId);
+            }
+            DataManager.CurrentPlayer.RecordStageResult(currentStageId, finalScore, survivalVictoryAchieved ? elapsedSeconds : 0);
+            DataManager.SaveStageLeaderboard(currentStageId);
+            int exp = DataManager.RewardExp(currentGameMode, rank, finalScore, currentStageId, elapsedSeconds, survivalVictoryAchieved);
+            DataManager.SaveData();
+            stageScore = finalScore;
             expRewarded = true;
             return exp;
         }
@@ -2570,6 +2599,10 @@ namespace Peace_of_Tanks
 
             launchOptions = options ?? new GameLaunchOptions();
             currentGameMode = launchOptions.Mode;
+            currentStageId = Math.Max(1, launchOptions.StageId);
+            stageScore = 0;
+            stageDamageTaken = 0;
+            stageStartedAtUtc = DateTime.UtcNow;
             selectedTankType = launchOptions.TankType;
             if (launchOptions.MapConfig == null)
             {

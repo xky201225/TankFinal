@@ -464,17 +464,77 @@ namespace Peace_of_Tanks
                 ShowNetworkRoomPage();
             }));
 
-            pageControls.Add(CreatePanelButton("协作模式", "双人组队打怪，共同推进波次并击败 Boss。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) =>
+            pageControls.Add(CreatePanelButton("协作模式", "双人组队打怪，共同推进三关并击败每关 Boss。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) =>
             {
                 selectedNetworkRule = BattleRuleMode.Survival;
-                ShowNetworkRoomPage();
+                ShowCoopStagePage();
             }));
 
             pageControls.Add(CreateBackButton());
             AddPageControls();
         }
 
+        private void ShowCoopStagePage()
+        {
+            ClearPage();
+            RefreshTopExp();
+
+            pageControls.Add(new HudHeader
+            {
+                Title = "联机协作关卡",
+                Subtitle = "选择已解锁关卡后再创建或加入房间，协作通关会继续解锁后续关卡",
+                Size = new Size(760, 74),
+                Location = new Point(260, 82)
+            });
+
+            for (int stage = 1; stage <= 3; stage++)
+            {
+                bool unlocked = playerData.IsStageUnlocked(stage);
+                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关 - " + BattleMapFactory.GetStageMapName(stage)) : ("第" + stage + "关 未解锁"), new Point(330, 170 + (stage - 1) * 72), unlocked);
+                stageButton.Size = new Size(370, 42);
+                int capturedStage = stage;
+                stageButton.Click += (s, e) => ShowNetworkRoomPage(capturedStage);
+                pageControls.Add(stageButton);
+            }
+
+            pageControls.Add(CreateLeaderboardPanel());
+            pageControls.Add(CreateBackButton((s, e) => ShowMatchPage()));
+            AddPageControls();
+        }
+
+        private Control CreateSingleLeaderboardPanel()
+        {
+            DataManager.RefreshLeaderboard();
+
+            HudPanel panel = new HudPanel
+            {
+                Size = new Size(240, 250),
+                Location = new Point(40, 180),
+                BackColor = Color.FromArgb(20, 28, 42)
+            };
+
+            panel.Controls.Add(CreatePanelLabel("单人关卡榜", new Point(12, 10), 10, Color.White, FontStyle.Bold));
+            int y = 34;
+            for (int stage = 1; stage <= 3; stage++)
+            {
+                LeaderboardEntry best = playerData.LeaderboardEntries.Where(r => r.StageId == stage).OrderBy(r => r.Rank <= 0 ? int.MaxValue : r.Rank).ThenByDescending(r => r.Score).FirstOrDefault();
+                string bestText = best == null ? "暂无" : (best.UserName + " " + best.Score + "分");
+                string rankText = best == null || best.Rank <= 0 ? "-" : ("#" + best.Rank);
+                panel.Controls.Add(CreatePanelLabel("第" + stage + "关 " + rankText, new Point(12, y), 9, Color.FromArgb(255, 231, 145), FontStyle.Bold));
+                y += 18;
+                panel.Controls.Add(CreatePanelLabel(bestText, new Point(12, y), 9, Color.FromArgb(210, 225, 235), FontStyle.Regular));
+                y += 18;
+            }
+
+            return panel;
+        }
+
         private void ShowNetworkRoomPage()
+        {
+            ShowNetworkRoomPage(1);
+        }
+
+        private void ShowNetworkRoomPage(int selectedStage)
         {
             ClearPage();
 
@@ -482,7 +542,7 @@ namespace Peace_of_Tanks
             pageControls.Add(new HudHeader
             {
                 Title = versusMode ? "联机竞技" : "联机协作",
-                Subtitle = versusMode ? "创建房间、搜索房间或加入指定房间进行对战" : "创建房间、搜索房间或加入指定房间组队闯关",
+                Subtitle = versusMode ? "创建房间、搜索房间或加入指定房间进行对战" : ("当前关卡：第" + selectedStage + "关  " + BattleMapFactory.GetStageMapName(selectedStage)),
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
@@ -497,6 +557,32 @@ namespace Peace_of_Tanks
             pageControls.Add(CreateJoinRoomPanel());
             pageControls.Add(CreateBackButton((s, e) => ShowMatchPage()));
             AddPageControls();
+        }
+
+        private Control CreateLeaderboardPanel()
+        {
+            DataManager.RefreshLeaderboard();
+
+            HudPanel panel = new HudPanel
+            {
+                Size = new Size(600, 210),
+                Location = new Point(330, 420),
+                BackColor = Color.FromArgb(14, 24, 36)
+            };
+
+            panel.Controls.Add(CreatePanelLabel("关卡排行榜", new Point(22, 16), 16, Color.White, FontStyle.Bold));
+            int y = 48;
+            for (int stage = 1; stage <= 3; stage++)
+            {
+                LeaderboardEntry best = playerData.LeaderboardEntries.Where(r => r.StageId == stage).OrderBy(r => r.Rank <= 0 ? int.MaxValue : r.Rank).ThenByDescending(r => r.Score).FirstOrDefault();
+                string bestScoreText = best == null ? "暂无" : (best.UserName + "  " + best.Score + " 分");
+                string bestTimeText = best == null || best.BestTimeSeconds <= 0 ? "暂无" : (best.BestTimeSeconds + " 秒");
+                string rankText = best == null || best.Rank <= 0 ? "-" : ("#" + best.Rank);
+                panel.Controls.Add(CreatePanelLabel("第" + stage + "关  排名：" + rankText + "   最高分：" + bestScoreText + "   最快通关：" + bestTimeText, new Point(22, y), 10, Color.FromArgb(210, 225, 235), FontStyle.Regular));
+                y += 42;
+            }
+
+            return panel;
         }
 
         private Control CreateJoinRoomPanel()
@@ -667,7 +753,9 @@ namespace Peace_of_Tanks
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
-            HudPanel panel = new HudPanel { Size = new Size(420, 360), Location = new Point(285, 180), BackColor = Color.FromArgb(14, 24, 36) };
+            HudPanel panel = new HudPanel { Size = new Size(400, 360), Location = new Point(305, 180), BackColor = Color.FromArgb(14, 24, 36) };
+            Control leaderboardPanel = CreateSingleLeaderboardPanel();
+            leaderboardPanel.Location = new Point(40, 180);
             Label title = CreatePanelLabel("选择关卡", new Point(24, 28), 14, Color.White, FontStyle.Bold);
             panel.Controls.Add(title);
 
@@ -709,6 +797,7 @@ namespace Peace_of_Tanks
             panel.Controls.Add(start);
 
             pageControls.Add(panel);
+            pageControls.Add(leaderboardPanel);
             pageControls.Add(CreateBackButton());
             AddPageControls();
         }
@@ -758,7 +847,7 @@ namespace Peace_of_Tanks
         {
             PlayerTankData tankData = playerData.Tanks[type];
             TankConfig config = TankConfigs.GetConfig(type);
-            bool canUnlock = !tankData.IsUnlocked && playerData.TotalExp >= config.UnlockExp;
+            bool canUnlock = !tankData.IsUnlocked && playerData.TotalExp >= config.UnlockCoin;
 
             TankCardControl card = new TankCardControl
             {
@@ -1473,7 +1562,7 @@ namespace Peace_of_Tanks
                         string skillName = TankSkillCatalog.GetDisplayName(skillType);
                         stats = TankData.IsUnlocked
                             ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\n技能 " + skillName + "  CD " + TankSkillCatalog.GetCooldownSeconds(skillType).ToString("0") + "s"
-                            : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n技能 " + skillName + "\n解锁 " + TankConfig.UnlockExp;
+                            : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n技能 " + skillName + "\n解锁 " + TankConfig.UnlockCoin + " 金币";
                     }
 
                     e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 50, 124, 76));
