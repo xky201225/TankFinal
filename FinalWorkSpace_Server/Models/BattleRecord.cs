@@ -21,6 +21,12 @@ public partial class BattleRecord
 
     public int Hearts { get; set; }
 
+    public int StageId { get; set; }
+
+    public int BestTimeSeconds { get; set; }
+
+    public int Rank { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public virtual User User { get; set; }

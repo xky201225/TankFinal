@@ -741,19 +741,19 @@ namespace Peace_of_Tanks
             GameMapConfig selectedMap = BattleMapFactory.CreateStageMap(selectedStage);
             MapEditorControl mapPreview = new MapEditorControl
             {
-                Size = new Size(420, 420),
-                Location = new Point(735, 160),
+                Size = new Size(360, 360),
+                Location = new Point(880, 180),
                 BackColor = Color.FromArgb(14, 24, 36),
                 Map = selectedMap,
                 Editable = false,
                 SelectedTile = MapTileType.Wall
             };
 
-            Label previewTitle = CreatePanelLabel("关卡预览", new Point(735, 132), 12, Color.White, FontStyle.Bold);
+            Label previewTitle = CreatePanelLabel("关卡预览", new Point(880, 154), 12, Color.White, FontStyle.Bold);
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
-            HudPanel panel = new HudPanel { Size = new Size(400, 360), Location = new Point(305, 180), BackColor = Color.FromArgb(14, 24, 36) };
+            HudPanel panel = new HudPanel { Size = new Size(520, 360), Location = new Point(305, 180), BackColor = Color.FromArgb(14, 24, 36) };
             Control leaderboardPanel = CreateSingleLeaderboardPanel();
             leaderboardPanel.Location = new Point(40, 180);
             Label title = CreatePanelLabel("选择关卡", new Point(24, 28), 14, Color.White, FontStyle.Bold);
@@ -777,13 +777,13 @@ namespace Peace_of_Tanks
                 panel.Controls.Add(stageButton);
 
                 string desc = capturedStage == 1 ? "废墟前线：适合起步熟悉走位与清怪。" : capturedStage == 2 ? "钢铁水坝：障碍更多，侧翼压力更强。" : "要塞核心：核心战场，Boss压制最强。";
-                panel.Controls.Add(CreatePanelLabel(desc, new Point(220, 82 + (capturedStage - 1) * 64), 9, unlocked ? Color.FromArgb(200, 215, 230) : Color.FromArgb(120, 130, 145), FontStyle.Regular));
+                panel.Controls.Add(CreatePanelLabel(desc, new Point(220, 78 + (capturedStage - 1) * 64), new Size(260, 42), 9, unlocked ? Color.FromArgb(200, 215, 230) : Color.FromArgb(120, 130, 145), FontStyle.Regular));
             }
 
-            panel.Controls.Add(CreatePanelLabel("规则：通关当前关卡后解锁下一关，也可反复挑战已通关关卡。", new Point(24, 276), 9, Color.FromArgb(190, 205, 225), FontStyle.Regular));
+            panel.Controls.Add(CreatePanelLabel("规则：通关当前关卡后解锁下一关，也可反复挑战已通关关卡。", new Point(24, 276), new Size(460, 36), 9, Color.FromArgb(190, 205, 225), FontStyle.Regular));
 
             Button start = CreateSmallButton("开始挑战", new Point(24, 310), true);
-            start.Size = new Size(128, 34);
+            start.Size = new Size(160, 40);
             start.Click += (s, e) =>
             {
                 if (!playerData.IsStageUnlocked(selectedStage))
@@ -960,6 +960,20 @@ namespace Peace_of_Tanks
                 ForeColor = color,
                 BackColor = Color.FromArgb(14, 24, 36),
                 AutoSize = true,
+                Location = location
+            };
+        }
+
+        private Label CreatePanelLabel(string text, Point location, Size labelSize, float size, Color color, FontStyle style)
+        {
+            return new Label
+            {
+                Text = text,
+                Font = new Font("Microsoft YaHei UI", size, style),
+                ForeColor = color,
+                BackColor = Color.FromArgb(14, 24, 36),
+                AutoSize = false,
+                Size = labelSize,
                 Location = location
             };
         }

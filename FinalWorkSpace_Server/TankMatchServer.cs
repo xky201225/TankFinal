@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
+using Microsoft.Data.SqlClient;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -152,6 +154,7 @@ namespace Peace_of_Tanks_Server
 
         private void HandleRegister(ClientSession session, string line)
         {
+            EnsureDatabaseSchema();
             string[] parts = line.Split('|');
             string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
             string password = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
@@ -184,6 +187,7 @@ namespace Peace_of_Tanks_Server
                         PasswordHash = HashPassword(password),
                         TotalExp = 0,
                         SelectedTank = 0,
+                        HighestUnlockedStage = 1,
                         CreatedAt = now,
                         UpdatedAt = now,
                         LastLoginAt = now
@@ -227,6 +231,7 @@ namespace Peace_of_Tanks_Server
 
         private void HandleLogin(ClientSession session, string line)
         {
+            EnsureDatabaseSchema();
             string[] parts = line.Split('|');
             string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
             string password = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
@@ -262,6 +267,7 @@ namespace Peace_of_Tanks_Server
 
         private void HandleSync(ClientSession session, string line)
         {
+            EnsureDatabaseSchema();
             string[] parts = line.Split('|');
             string userName = parts.Length > 1 ? DecodeProtocolPart(parts[1]).Trim() : string.Empty;
             string token = parts.Length > 2 ? DecodeProtocolPart(parts[2]) : string.Empty;
@@ -460,8 +466,39 @@ namespace Peace_of_Tanks_Server
             {
                 UserName = user.UserName,
                 TotalExp = user.TotalExp,
-                SelectedTank = user.SelectedTank
+                SelectedTank = user.SelectedTank,
+                HighestUnlockedStage = Math.Max(1, Math.Min(3, user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage))
             };
+
+            foreach (BattleRecord record in db.BattleRecords.Where(r => r.UserId == user.Id).ToList())
+            {
+                payload.StageRecords.Add(new StageRecordPayload
+                {
+                    StageId = record.StageId,
+                    BestScore = record.Points,
+                    BestTimeSeconds = record.BestTimeSeconds,
+                    Rank = record.Rank
+                });
+            }
+
+            foreach (BattleRecord record in db.BattleRecords
+                .OrderBy(r => r.StageId)
+                .ThenBy(r => r.Rank <= 0 ? int.MaxValue : r.Rank)
+                .ThenByDescending(r => r.Points)
+                .ThenBy(r => r.Id)
+                .ToList()
+                .GroupBy(r => r.StageId)
+                .SelectMany(g => g.Take(10)))
+            {
+                payload.LeaderboardEntries.Add(new LeaderboardEntryPayload
+                {
+                    StageId = record.StageId,
+                    UserName = record.PlayerName,
+                    Score = record.Points,
+                    BestTimeSeconds = record.BestTimeSeconds,
+                    Rank = record.Rank
+                });
+            }
 
             foreach (UserTank tank in db.UserTanks.Where(t => t.UserId == user.Id).ToList())
             {
@@ -486,6 +523,7 @@ namespace Peace_of_Tanks_Server
         {
             user.TotalExp = payload.TotalExp;
             user.SelectedTank = payload.SelectedTank;
+            user.HighestUnlockedStage = Math.Max(user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage, Math.Max(1, Math.Min(3, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage)));
             user.UpdatedAt = DateTime.UtcNow;
             db.SaveChanges();
 
@@ -514,6 +552,116 @@ namespace Peace_of_Tanks_Server
             }
 
             db.SaveChanges();
+
+            foreach (StageRecordPayload stagePayload in payload.StageRecords ?? new List<StageRecordPayload>())
+            {
+                if (stagePayload.StageId < 1 || stagePayload.StageId > 3)
+                {
+                    continue;
+                }
+
+                BattleRecord record = db.BattleRecords.FirstOrDefault(r => r.UserId == user.Id && r.StageId == stagePayload.StageId);
+                if (record == null)
+                {
+                    record = new BattleRecord
+                    {
+                        UserId = user.Id,
+                        PlayerName = user.UserName,
+                        GameMode = 0,
+                        Difficulty = Math.Max(0, stagePayload.StageId - 1),
+                        Hearts = 0,
+                        StageId = stagePayload.StageId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    db.BattleRecords.Add(record);
+                }
+
+                bool betterScore = stagePayload.BestScore > record.Points;
+                bool betterTime = stagePayload.BestTimeSeconds > 0 && (record.BestTimeSeconds <= 0 || stagePayload.BestTimeSeconds < record.BestTimeSeconds);
+                if (betterScore || betterTime)
+                {
+                    record.PlayerName = user.UserName;
+                    record.Points = Math.Max(record.Points, stagePayload.BestScore);
+                    record.BestTimeSeconds = betterTime ? stagePayload.BestTimeSeconds : record.BestTimeSeconds;
+                    record.GameMode = 0;
+                    record.Difficulty = Math.Max(0, stagePayload.StageId - 1);
+                    record.CreatedAt = DateTime.UtcNow;
+                }
+            }
+
+            db.SaveChanges();
+
+            for (int stageId = 1; stageId <= 3; stageId++)
+            {
+                RebuildStageRanks(db, stageId);
+            }
+        }
+
+        private static void RebuildStageRanks(LocalDBMSSQLLocalDBContext db, int stageId)
+        {
+            List<BattleRecord> records = db.BattleRecords
+                .Where(r => r.StageId == stageId)
+                .OrderByDescending(r => r.Points)
+                .ThenBy(r => r.BestTimeSeconds <= 0 ? int.MaxValue : r.BestTimeSeconds)
+                .ThenBy(r => r.CreatedAt)
+                .ThenBy(r => r.Id)
+                .ToList();
+
+            for (int i = 0; i < records.Count; i++)
+            {
+                records[i].Rank = i + 1;
+            }
+
+            db.SaveChanges();
+        }
+
+        private static void EnsureDatabaseSchema()
+        {
+            using (SqlConnection connection = new SqlConnection(ServerPaths.LocalDatabaseConnectionString))
+            {
+                connection.Open();
+                using (SqlCommand command = new SqlCommand(@"IF COL_LENGTH('Users', 'HighestUnlockedStage') IS NULL
+BEGIN
+    ALTER TABLE Users ADD HighestUnlockedStage INT NOT NULL CONSTRAINT DF_Users_HighestUnlockedStage DEFAULT(1)
+END
+
+IF COL_LENGTH('BattleRecords', 'StageId') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD StageId INT NOT NULL CONSTRAINT DF_BattleRecords_StageId DEFAULT(1)
+END
+
+IF COL_LENGTH('BattleRecords', 'BestTimeSeconds') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD BestTimeSeconds INT NOT NULL CONSTRAINT DF_BattleRecords_BestTimeSeconds DEFAULT(0)
+END
+
+IF COL_LENGTH('BattleRecords', 'Rank') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD Rank INT NOT NULL CONSTRAINT DF_BattleRecords_Rank DEFAULT(0)
+END
+
+;WITH Duplicates AS (
+    SELECT Id,
+           ROW_NUMBER() OVER (
+               PARTITION BY UserId, StageId
+               ORDER BY Points DESC,
+                        CASE WHEN BestTimeSeconds <= 0 THEN 2147483647 ELSE BestTimeSeconds END ASC,
+                        CreatedAt ASC,
+                        Id ASC
+           ) AS RowNumber
+    FROM BattleRecords
+)
+DELETE FROM Duplicates WHERE RowNumber > 1
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BattleRecords_UserStage' AND object_id = OBJECT_ID('BattleRecords'))
+BEGIN
+    CREATE UNIQUE INDEX UX_BattleRecords_UserStage ON BattleRecords(UserId, StageId)
+END", connection))
+                {
+                    command.CommandType = CommandType.Text;
+                    command.ExecuteNonQuery();
+                }
+            }
         }
 
         private static int ClampUpgradeLevel(int value)

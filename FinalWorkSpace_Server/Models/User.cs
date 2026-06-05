@@ -17,6 +17,8 @@ public partial class User
 
     public int SelectedTank { get; set; }
 
+    public int HighestUnlockedStage { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

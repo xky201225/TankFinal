@@ -37,7 +37,12 @@ public partial class LocalDBMSSQLLocalDBContext : DbContext
 
             entity.HasIndex(e => e.UserId, "IX_BattleRecords_UserId");
 
+            entity.HasIndex(e => new { e.UserId, e.StageId }, "UX_BattleRecords_UserStage").IsUnique();
+
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.Rank).HasDefaultValue(0);
+            entity.Property(e => e.StageId).HasDefaultValue(1);
+            entity.Property(e => e.BestTimeSeconds).HasDefaultValue(0);
             entity.Property(e => e.PlayerName)
                 .IsRequired()
                 .HasMaxLength(50);
@@ -57,6 +62,7 @@ public partial class LocalDBMSSQLLocalDBContext : DbContext
             entity.Property(e => e.PasswordHash)
                 .IsRequired()
                 .HasMaxLength(255);
+            entity.Property(e => e.HighestUnlockedStage).HasDefaultValue(1);
             entity.Property(e => e.SelectedTank).HasDefaultValue(0);
             entity.Property(e => e.TotalExp).HasDefaultValue(0);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("(sysutcdatetime())");

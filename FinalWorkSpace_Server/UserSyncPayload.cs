@@ -7,7 +7,27 @@ namespace Peace_of_Tanks_Server
         public string UserName { get; set; } = string.Empty;
         public int TotalExp { get; set; }
         public int SelectedTank { get; set; }
+        public int HighestUnlockedStage { get; set; }
         public List<TankSyncPayload> Tanks { get; set; } = new List<TankSyncPayload>();
+        public List<StageRecordPayload> StageRecords { get; set; } = new List<StageRecordPayload>();
+        public List<LeaderboardEntryPayload> LeaderboardEntries { get; set; } = new List<LeaderboardEntryPayload>();
+    }
+
+    internal sealed class StageRecordPayload
+    {
+        public int StageId { get; set; }
+        public int BestScore { get; set; }
+        public int BestTimeSeconds { get; set; }
+        public int Rank { get; set; }
+    }
+
+    internal sealed class LeaderboardEntryPayload
+    {
+        public int StageId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public int Score { get; set; }
+        public int BestTimeSeconds { get; set; }
+        public int Rank { get; set; }
     }
 
     internal sealed class TankSyncPayload

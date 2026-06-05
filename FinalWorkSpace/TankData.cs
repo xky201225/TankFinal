@@ -5,7 +5,6 @@ using System.Data.SqlClient;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Windows.Forms;
 
 namespace Peace_of_Tanks
@@ -408,7 +407,6 @@ namespace Peace_of_Tanks
 
     public static class DataManager
     {
-        private static readonly string JsonFallbackPath = AppPaths.GetDataPath("playerdata.json");
         private const string DefaultRegisterHost = "127.0.0.1";
         private const int DefaultRegisterPort = 51888;
         private static string currentServerHost = DefaultRegisterHost;
@@ -451,13 +449,13 @@ namespace Peace_of_Tanks
             try
             {
                 currentPlayerData = AuthenticateUser();
-                SaveJsonFallback();
+                SaveLocalDatabaseFallback(currentPlayerData);
                 StartSyncTimer();
             }
             catch (Exception ex)
             {
-                LoadJsonFallback();
-                MessageBox.Show("连接服务端数据库失败，已使用本地临时数据：" + ex.Message);
+                LoadLocalDatabaseFallback();
+                MessageBox.Show("杩炴帴鏈嶅姟绔暟鎹簱澶辫触锛屽凡浣跨敤鏈湴鏁版嵁搴撳浠斤細" + ex.Message);
             }
         }
 
@@ -470,15 +468,13 @@ namespace Peace_of_Tanks
 
             try
             {
-                SaveStageProgressToDatabase(currentPlayerData);
-                SaveLeaderboardToDatabase(currentPlayerData);
                 SyncWithServer();
-                SaveJsonFallback();
+                SaveLocalDatabaseFallback(currentPlayerData);
             }
             catch (Exception ex)
             {
-                SaveJsonFallback();
-                MessageBox.Show("保存到服务端数据库失败，已临时保存到本地 JSON：" + ex.Message);
+                SaveLocalDatabaseFallback(currentPlayerData);
+                MessageBox.Show("淇濆瓨鍒版湇鍔＄鏁版嵁搴撳け璐ワ紝宸蹭复鏃朵繚瀛樺埌鏈湴鏁版嵁搴擄細" + ex.Message);
             }
         }
 
@@ -489,8 +485,8 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            LoadLeaderboardFromDatabase(currentPlayerData);
-            SaveJsonFallback();
+            SyncWithServer();
+            SaveLocalDatabaseFallback(currentPlayerData);
         }
 
         public static int CalculateRewardExp(GameMode mode, int rank, int score, int stageId, int elapsedSeconds, bool cleared)
@@ -543,7 +539,7 @@ namespace Peace_of_Tanks
 
             if (string.IsNullOrWhiteSpace(currentAuthToken))
             {
-                SaveJsonFallback();
+                SaveLocalDatabaseFallback(currentPlayerData);
                 return;
             }
 
@@ -551,12 +547,12 @@ namespace Peace_of_Tanks
             UserSyncPayload serverPayload;
             if (!TcpGameClient.SyncUser(currentServerHost, currentServerPort, currentPlayerData.UserName, currentAuthToken, MapPlayerDataToPayload(currentPlayerData), out serverPayload, out error))
             {
-                SaveJsonFallback();
+                SaveLocalDatabaseFallback(currentPlayerData);
                 return;
             }
 
             ApplyPayloadToPlayerData(currentPlayerData, serverPayload, currentPlayerData.UserId);
-            SaveJsonFallback();
+            SaveLocalDatabaseFallback(currentPlayerData);
         }
 
         private static PlayerData AuthenticateUser()
@@ -566,7 +562,7 @@ namespace Peace_of_Tanks
                 AuthRequest request;
                 if (!AuthDialog.ShowDialog(currentServerHost, currentServerPort, out request))
                 {
-                    MessageBox.Show("进入游戏必须登录或注册。", "用户登录", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("\u8fdb\u5165\u6e38\u620f\u5fc5\u987b\u767b\u5f55\u6216\u6ce8\u518c\u3002", "\u7528\u6237\u767b\u5f55", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     continue;
                 }
 
@@ -578,7 +574,14 @@ namespace Peace_of_Tanks
                 {
                     if (!TcpGameClient.RegisterUser(request.ServerHost, request.ServerPort, request.UserName, request.Password, out error))
                     {
-                        MessageBox.Show("注册失败：" + error, "用户注册", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        PlayerData fallbackPlayer;
+                        if (TryUseLocalDatabaseFallback(request.UserName, out fallbackPlayer))
+                        {
+                            currentAuthToken = string.Empty;
+                            return fallbackPlayer;
+                        }
+
+                        MessageBox.Show("\u6ce8\u518c\u5931\u8d25\uff1a" + error, "\u7528\u6237\u6ce8\u518c", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         continue;
                     }
                 }
@@ -587,7 +590,14 @@ namespace Peace_of_Tanks
                 string authToken;
                 if (!TcpGameClient.LoginUser(request.ServerHost, request.ServerPort, request.UserName, request.Password, out payload, out authToken, out error))
                 {
-                    MessageBox.Show("登录失败：" + error, "用户登录", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    PlayerData fallbackPlayer;
+                    if (TryUseLocalDatabaseFallback(request.UserName, out fallbackPlayer))
+                    {
+                        currentAuthToken = string.Empty;
+                        return fallbackPlayer;
+                    }
+
+                    MessageBox.Show("\u767b\u5f55\u5931\u8d25\uff1a" + error, "\u7528\u6237\u767b\u5f55", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     continue;
                 }
 
@@ -595,7 +605,6 @@ namespace Peace_of_Tanks
                 return MapPayloadToPlayerData(payload, 0);
             }
         }
-
         private static void StartSyncTimer()
         {
             if (syncTimer != null)
@@ -677,6 +686,19 @@ namespace Peace_of_Tanks
                 });
             }
 
+            playerData.LeaderboardEntries = new List<LeaderboardEntry>();
+            foreach (LeaderboardEntryPayload entry in payload.LeaderboardEntries ?? new List<LeaderboardEntryPayload>())
+            {
+                playerData.LeaderboardEntries.Add(new LeaderboardEntry
+                {
+                    StageId = entry.StageId,
+                    UserName = entry.UserName ?? string.Empty,
+                    Score = entry.Score,
+                    BestTimeSeconds = entry.BestTimeSeconds,
+                    Rank = entry.Rank
+                });
+            }
+
             foreach (TankSyncPayload tank in payload.Tanks ?? new List<TankSyncPayload>())
             {
                 TankType tankType = ParseTankType(tank.TankType);
@@ -694,120 +716,11 @@ namespace Peace_of_Tanks
                 };
             }
 
-            LoadStageProgressFromDatabase(playerData);
-            LoadLeaderboardFromDatabase(playerData);
-        }
-
-        private static void LoadStageProgressFromDatabase(PlayerData playerData)
-        {
-            if (playerData == null || string.IsNullOrWhiteSpace(playerData.UserName))
+            foreach (StageRecord record in playerData.StageRecords)
             {
-                return;
+                LeaderboardEntry selfEntry = playerData.LeaderboardEntries.FirstOrDefault(e => e.StageId == record.StageId && string.Equals(e.UserName, playerData.UserName, StringComparison.OrdinalIgnoreCase));
+                record.Rank = selfEntry == null ? 0 : selfEntry.Rank;
             }
-
-            lock (databaseSyncLock)
-            {
-                try
-                {
-                    EnsureStageProgressSchema();
-                    using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
-                    {
-                        connection.Open();
-                        using (SqlCommand command = new SqlCommand("SELECT TOP 1 HighestUnlockedStage FROM Users WHERE UserName = @UserName", connection))
-                        {
-                            command.Parameters.Add("@UserName", SqlDbType.NVarChar, 50).Value = playerData.UserName;
-                            object value = command.ExecuteScalar();
-                            if (value != null && value != DBNull.Value)
-                            {
-                                int unlockedStage = Convert.ToInt32(value);
-                                if (unlockedStage > 0)
-                                {
-                                    playerData.HighestUnlockedStage = Math.Max(playerData.HighestUnlockedStage, Math.Min(3, unlockedStage));
-                                }
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        private static void SaveStageProgressToDatabase(PlayerData playerData)
-        {
-            if (playerData == null || string.IsNullOrWhiteSpace(playerData.UserName))
-            {
-                return;
-            }
-
-            lock (databaseSyncLock)
-            {
-                try
-                {
-                    EnsureStageProgressSchema();
-                    using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
-                    {
-                        connection.Open();
-                        using (SqlCommand command = new SqlCommand("UPDATE Users SET HighestUnlockedStage = CASE WHEN ISNULL(HighestUnlockedStage, 0) > @HighestUnlockedStage THEN HighestUnlockedStage ELSE @HighestUnlockedStage END, UpdatedAt = SYSUTCDATETIME() WHERE UserName = @UserName", connection))
-                        {
-                            command.Parameters.Add("@HighestUnlockedStage", SqlDbType.Int).Value = Math.Max(1, Math.Min(3, playerData.HighestUnlockedStage));
-                            command.Parameters.Add("@UserName", SqlDbType.NVarChar, 50).Value = playerData.UserName;
-                            command.ExecuteNonQuery();
-                        }
-                    }
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        private static void EnsureStageProgressSchema()
-        {
-            using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
-            {
-                connection.Open();
-                using (SqlCommand command = new SqlCommand(@"IF COL_LENGTH('Users', 'HighestUnlockedStage') IS NULL
-BEGIN
-    ALTER TABLE Users ADD HighestUnlockedStage INT NOT NULL CONSTRAINT DF_Users_HighestUnlockedStage DEFAULT(1)
-END", connection))
-                {
-                    command.ExecuteNonQuery();
-                }
-            }
-        }
-
-        private static void EnsureLeaderboardSchema()
-        {
-            using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
-            {
-                connection.Open();
-                using (SqlCommand command = new SqlCommand(@"IF COL_LENGTH('BattleRecords', 'StageId') IS NULL
-BEGIN
-    ALTER TABLE BattleRecords ADD StageId INT NOT NULL CONSTRAINT DF_BattleRecords_StageId DEFAULT(1)
-END
-IF COL_LENGTH('BattleRecords', 'BestTimeSeconds') IS NULL
-BEGIN
-    ALTER TABLE BattleRecords ADD BestTimeSeconds INT NOT NULL CONSTRAINT DF_BattleRecords_BestTimeSeconds DEFAULT(0)
-END
-IF COL_LENGTH('BattleRecords', 'Rank') IS NULL
-BEGIN
-    ALTER TABLE BattleRecords ADD Rank INT NOT NULL CONSTRAINT DF_BattleRecords_Rank DEFAULT(0)
-END
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BattleRecords_UserStage' AND object_id = OBJECT_ID('BattleRecords'))
-BEGIN
-    CREATE UNIQUE INDEX UX_BattleRecords_UserStage ON BattleRecords(UserId, StageId)
-END", connection))
-                {
-                    command.ExecuteNonQuery();
-                }
-            }
-        }
-
-        private static void SaveLeaderboardToDatabase(PlayerData playerData)
-        {
-            SaveLeaderboardToDatabase(playerData, 0);
         }
 
         public static void SaveStageLeaderboard(int stageId)
@@ -817,196 +730,8 @@ END", connection))
                 return;
             }
 
-            SaveLeaderboardToDatabase(currentPlayerData, stageId);
             SyncWithServer();
-            SaveJsonFallback();
-        }
-
-        private static void SaveLeaderboardToDatabase(PlayerData playerData, int stageId)
-        {
-            if (playerData == null || string.IsNullOrWhiteSpace(playerData.UserName))
-            {
-                return;
-            }
-
-            StageRecord latestRecord = stageId > 0 ? playerData.GetStageRecord(stageId) : playerData.StageRecords.OrderByDescending(r => r.BestScore).ThenByDescending(r => r.StageId).FirstOrDefault();
-            if (latestRecord == null)
-            {
-                LoadLeaderboardFromDatabase(playerData);
-                return;
-            }
-
-            lock (databaseSyncLock)
-            {
-                try
-                {
-                    EnsureLeaderboardSchema();
-                    using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
-                    {
-                        connection.Open();
-                        int userId = EnsureDatabaseUserId(connection, playerData.UserName);
-                        if (userId <= 0)
-                        {
-                            return;
-                        }
-
-                        UpsertBattleRecord(connection, userId, playerData.UserName, latestRecord.StageId, latestRecord.BestScore, latestRecord.BestTimeSeconds);
-                        RebuildStageRanks(connection, latestRecord.StageId);
-                        LoadLeaderboardFromDatabase(playerData, connection);
-                        ApplyRankToLocalStageRecord(playerData, latestRecord.StageId);
-                    }
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        private static int EnsureDatabaseUserId(SqlConnection connection, string userName)
-        {
-            using (SqlCommand command = new SqlCommand("SELECT TOP 1 Id FROM Users WHERE UserName = @UserName", connection))
-            {
-                command.Parameters.Add("@UserName", SqlDbType.NVarChar, 50).Value = userName;
-                object value = command.ExecuteScalar();
-                if (value == null || value == DBNull.Value)
-                {
-                    return 0;
-                }
-
-                return Convert.ToInt32(value);
-            }
-        }
-
-        private static bool UpsertBattleRecord(SqlConnection connection, int userId, string userName, int stageId, int score, int bestTimeSeconds)
-        {
-            using (SqlCommand mergeCommand = new SqlCommand(@"MERGE BattleRecords AS target
-USING (SELECT @UserId AS UserId, @StageId AS StageId) AS source
-ON target.UserId = source.UserId AND target.StageId = source.StageId
-WHEN MATCHED AND @Score > target.Points THEN
-    UPDATE SET Points = @Score,
-               PlayerName = @PlayerName,
-               BestTimeSeconds = CASE WHEN @BestTimeSeconds > 0 AND (target.BestTimeSeconds <= 0 OR @BestTimeSeconds < target.BestTimeSeconds) THEN @BestTimeSeconds ELSE target.BestTimeSeconds END,
-               GameMode = @GameMode,
-               Difficulty = @Difficulty,
-               Hearts = 0,
-               CreatedAt = SYSUTCDATETIME()
-WHEN NOT MATCHED THEN
-    INSERT (UserId, PlayerName, Points, GameMode, Difficulty, Hearts, CreatedAt, StageId, BestTimeSeconds, Rank)
-    VALUES (@UserId, @PlayerName, @Score, @GameMode, @Difficulty, 0, SYSUTCDATETIME(), @StageId, @BestTimeSeconds, 0);", connection))
-            {
-                mergeCommand.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
-                mergeCommand.Parameters.Add("@StageId", SqlDbType.Int).Value = stageId;
-                mergeCommand.Parameters.Add("@PlayerName", SqlDbType.NVarChar, 50).Value = userName;
-                mergeCommand.Parameters.Add("@Score", SqlDbType.Int).Value = Math.Max(0, score);
-                mergeCommand.Parameters.Add("@BestTimeSeconds", SqlDbType.Int).Value = Math.Max(0, bestTimeSeconds);
-                mergeCommand.Parameters.Add("@GameMode", SqlDbType.Int).Value = (int)GameMode.SinglePlayer;
-                mergeCommand.Parameters.Add("@Difficulty", SqlDbType.Int).Value = Math.Max(0, stageId - 1);
-                return mergeCommand.ExecuteNonQuery() > 0;
-            }
-        }
-
-        private static void RebuildStageRanks(SqlConnection connection, int stageId)
-        {
-            using (SqlCommand command = new SqlCommand(@"WITH Ranked AS (
-    SELECT Id,
-           ROW_NUMBER() OVER (ORDER BY Points DESC, CASE WHEN BestTimeSeconds <= 0 THEN 2147483647 ELSE BestTimeSeconds END ASC, CreatedAt ASC, Id ASC) AS NewRank
-    FROM BattleRecords
-    WHERE StageId = @StageId
-)
-UPDATE br
-SET Rank = r.NewRank
-FROM BattleRecords br
-INNER JOIN Ranked r ON br.Id = r.Id;", connection))
-            {
-                command.Parameters.Add("@StageId", SqlDbType.Int).Value = stageId;
-                command.ExecuteNonQuery();
-            }
-        }
-
-        private static void LoadLeaderboardFromDatabase(PlayerData playerData)
-        {
-            LoadLeaderboardFromDatabase(playerData, null);
-        }
-
-        private static void LoadLeaderboardFromDatabase(PlayerData playerData, SqlConnection existingConnection)
-        {
-            if (playerData == null)
-            {
-                return;
-            }
-
-            bool ownsConnection = existingConnection == null;
-            SqlConnection connection = existingConnection;
-            try
-            {
-                EnsureLeaderboardSchema();
-                if (ownsConnection)
-                {
-                    connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString);
-                    connection.Open();
-                }
-
-                List<LeaderboardEntry> entries = new List<LeaderboardEntry>();
-                using (SqlCommand command = new SqlCommand(@"SELECT StageId, PlayerName, Points, BestTimeSeconds, Rank
-FROM BattleRecords
-WHERE GameMode = @GameMode
-ORDER BY StageId ASC, Rank ASC, Points DESC, BestTimeSeconds ASC, Id ASC", connection))
-                {
-                    command.Parameters.Add("@GameMode", SqlDbType.Int).Value = (int)GameMode.SinglePlayer;
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            entries.Add(new LeaderboardEntry
-                            {
-                                StageId = reader.IsDBNull(0) ? 1 : reader.GetInt32(0),
-                                UserName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                                Score = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
-                                BestTimeSeconds = reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
-                                Rank = reader.IsDBNull(4) ? 0 : reader.GetInt32(4)
-                            });
-                        }
-                    }
-                }
-
-                playerData.LeaderboardEntries = entries;
-                foreach (StageRecord record in playerData.StageRecords)
-                {
-                    LeaderboardEntry selfEntry = entries.FirstOrDefault(e => e.StageId == record.StageId && string.Equals(e.UserName, playerData.UserName, StringComparison.OrdinalIgnoreCase));
-                    record.Rank = selfEntry == null ? 0 : selfEntry.Rank;
-                }
-            }
-            catch
-            {
-                if (playerData.LeaderboardEntries == null)
-                {
-                    playerData.LeaderboardEntries = new List<LeaderboardEntry>();
-                }
-            }
-            finally
-            {
-                if (ownsConnection && connection != null)
-                {
-                    connection.Dispose();
-                }
-            }
-        }
-
-        private static void ApplyRankToLocalStageRecord(PlayerData playerData, int stageId)
-        {
-            if (playerData == null)
-            {
-                return;
-            }
-
-            StageRecord record = playerData.GetStageRecord(stageId);
-            if (record == null)
-            {
-                return;
-            }
-
-            LeaderboardEntry selfEntry = playerData.LeaderboardEntries.FirstOrDefault(e => e.StageId == stageId && string.Equals(e.UserName, playerData.UserName, StringComparison.OrdinalIgnoreCase));
-            record.Rank = selfEntry == null ? 0 : selfEntry.Rank;
+            SaveLocalDatabaseFallback(currentPlayerData);
         }
 
         private static int ClampUpgradeLevel(int value)
@@ -1034,14 +759,37 @@ ORDER BY StageId ASC, Rank ASC, Points DESC, BestTimeSeconds ASC, Id ASC", conne
             return TankType.Green;
         }
 
-        private static void LoadJsonFallback()
+        private static void LoadLocalDatabaseFallback()
         {
             try
             {
-                if (File.Exists(JsonFallbackPath))
+                EnsureLocalFallbackSchema();
+                using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
                 {
-                    string json = File.ReadAllText(JsonFallbackPath);
-                    currentPlayerData = JsonSerializer.Deserialize<PlayerData>(json);
+                    connection.Open();
+                    using (SqlCommand command = new SqlCommand(@"SELECT TOP 1 Id, UserName, TotalExp, SelectedTank, HighestUnlockedStage
+FROM Users
+ORDER BY ISNULL(LastLoginAt, UpdatedAt) DESC, Id DESC", connection))
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            currentPlayerData = new PlayerData
+                            {
+                                UserId = reader.GetInt32(0),
+                                UserName = reader.IsDBNull(1) ? ("\u73a9\u5bb6" + Environment.UserName) : reader.GetString(1),
+                                TotalExp = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                                SelectedTank = reader.IsDBNull(3) ? TankType.Green : ParseTankType(reader.GetInt32(3)),
+                                HighestUnlockedStage = reader.IsDBNull(4) ? 1 : Math.Max(1, Math.Min(3, reader.GetInt32(4)))
+                            };
+                        }
+                    }
+
+                    if (currentPlayerData != null)
+                    {
+                        LoadLocalFallbackTanks(connection, currentPlayerData);
+                        LoadLocalFallbackRecords(connection, currentPlayerData);
+                    }
                 }
             }
             catch
@@ -1052,25 +800,289 @@ ORDER BY StageId ASC, Rank ASC, Points DESC, BestTimeSeconds ASC, Id ASC", conne
             {
                 currentPlayerData = new PlayerData
                 {
-                    UserName = "玩家" + Environment.UserName
+                    UserName = "鐜╁" + Environment.UserName
                 };
             }
         }
 
-        private static void SaveJsonFallback()
+        private static bool TryUseLocalDatabaseFallback(string requestedUserName, out PlayerData fallbackPlayer)
         {
+            LoadLocalDatabaseFallback();
+            fallbackPlayer = currentPlayerData;
+            if (fallbackPlayer == null)
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(requestedUserName))
+            {
+                return true;
+            }
+
+            return string.Equals(fallbackPlayer.UserName, requestedUserName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void SaveLocalDatabaseFallback(PlayerData playerData)
+        {
+            if (playerData == null || string.IsNullOrWhiteSpace(playerData.UserName))
+            {
+                return;
+            }
+
             try
             {
-                JsonSerializerOptions options = new JsonSerializerOptions
+                EnsureLocalFallbackSchema();
+                using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
                 {
-                    WriteIndented = true
-                };
-                string json = JsonSerializer.Serialize(currentPlayerData, options);
-                File.WriteAllText(JsonFallbackPath, json);
+                    connection.Open();
+                    int userId = UpsertLocalFallbackUser(connection, playerData);
+                    SaveLocalFallbackTanks(connection, userId, playerData);
+                    SaveLocalFallbackStageRecords(connection, userId, playerData);
+                    playerData.UserId = userId;
+                    LoadLocalFallbackRecords(connection, playerData);
+                }
             }
             catch
             {
             }
         }
+
+        private static void EnsureLocalFallbackSchema()
+        {
+            lock (databaseSyncLock)
+            {
+                using (SqlConnection connection = new SqlConnection(AppPaths.LocalDatabaseConnectionString))
+                {
+                    connection.Open();
+                    using (SqlCommand command = new SqlCommand(@"IF COL_LENGTH('Users', 'HighestUnlockedStage') IS NULL
+BEGIN
+    ALTER TABLE Users ADD HighestUnlockedStage INT NOT NULL CONSTRAINT DF_Users_HighestUnlockedStage DEFAULT(1)
+END
+
+IF COL_LENGTH('BattleRecords', 'StageId') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD StageId INT NOT NULL CONSTRAINT DF_BattleRecords_StageId DEFAULT(1)
+END
+
+IF COL_LENGTH('BattleRecords', 'BestTimeSeconds') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD BestTimeSeconds INT NOT NULL CONSTRAINT DF_BattleRecords_BestTimeSeconds DEFAULT(0)
+END
+
+IF COL_LENGTH('BattleRecords', 'Rank') IS NULL
+BEGIN
+    ALTER TABLE BattleRecords ADD Rank INT NOT NULL CONSTRAINT DF_BattleRecords_Rank DEFAULT(0)
+END
+
+;WITH Duplicates AS (
+    SELECT Id,
+           ROW_NUMBER() OVER (
+               PARTITION BY UserId, StageId
+               ORDER BY Points DESC,
+                        CASE WHEN BestTimeSeconds <= 0 THEN 2147483647 ELSE BestTimeSeconds END ASC,
+                        CreatedAt ASC,
+                        Id ASC
+           ) AS RowNumber
+    FROM BattleRecords
+)
+DELETE FROM Duplicates WHERE RowNumber > 1
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BattleRecords_UserStage' AND object_id = OBJECT_ID('BattleRecords'))
+BEGIN
+    CREATE UNIQUE INDEX UX_BattleRecords_UserStage ON BattleRecords(UserId, StageId)
+END", connection))
+                    {
+                        command.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        private static int UpsertLocalFallbackUser(SqlConnection connection, PlayerData playerData)
+        {
+            using (SqlCommand command = new SqlCommand(@"MERGE Users AS target
+USING (SELECT @UserName AS UserName) AS source
+ON target.UserName = source.UserName
+WHEN MATCHED THEN
+    UPDATE SET TotalExp = @TotalExp,
+               SelectedTank = @SelectedTank,
+               HighestUnlockedStage = CASE WHEN ISNULL(HighestUnlockedStage, 0) > @HighestUnlockedStage THEN HighestUnlockedStage ELSE @HighestUnlockedStage END,
+               UpdatedAt = SYSUTCDATETIME(),
+               LastLoginAt = SYSUTCDATETIME()
+WHEN NOT MATCHED THEN
+    INSERT (UserName, PasswordHash, TotalExp, SelectedTank, CreatedAt, UpdatedAt, LastLoginAt, HighestUnlockedStage)
+    VALUES (@UserName, @PasswordHash, @TotalExp, @SelectedTank, SYSUTCDATETIME(), SYSUTCDATETIME(), SYSUTCDATETIME(), @HighestUnlockedStage);
+
+SELECT TOP 1 Id FROM Users WHERE UserName = @UserName;", connection))
+            {
+                command.Parameters.Add("@UserName", SqlDbType.NVarChar, 50).Value = playerData.UserName;
+                command.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 255).Value = "LOCAL_FALLBACK_ONLY";
+                command.Parameters.Add("@TotalExp", SqlDbType.Int).Value = playerData.TotalExp;
+                command.Parameters.Add("@SelectedTank", SqlDbType.Int).Value = (int)playerData.SelectedTank;
+                command.Parameters.Add("@HighestUnlockedStage", SqlDbType.Int).Value = Math.Max(1, Math.Min(3, playerData.HighestUnlockedStage));
+                return Convert.ToInt32(command.ExecuteScalar());
+            }
+        }
+
+        private static void SaveLocalFallbackTanks(SqlConnection connection, int userId, PlayerData playerData)
+        {
+            foreach (KeyValuePair<TankType, PlayerTankData> pair in playerData.Tanks)
+            {
+                PlayerTankData tank = pair.Value;
+                using (SqlCommand command = new SqlCommand(@"MERGE UserTanks AS target
+USING (SELECT @UserId AS UserId, @TankType AS TankType) AS source
+ON target.UserId = source.UserId AND target.TankType = source.TankType
+WHEN MATCHED THEN
+    UPDATE SET Level = @Level,
+               SpeedLevel = @SpeedLevel,
+               AttackLevel = @AttackLevel,
+               HealthLevel = @HealthLevel,
+               BulletSpeedLevel = @BulletSpeedLevel,
+               CooldownLevel = @CooldownLevel,
+               CurrentExp = @CurrentExp,
+               IsUnlocked = @IsUnlocked
+WHEN NOT MATCHED THEN
+    INSERT (UserId, TankType, Level, SpeedLevel, AttackLevel, HealthLevel, BulletSpeedLevel, CooldownLevel, CurrentExp, IsUnlocked)
+    VALUES (@UserId, @TankType, @Level, @SpeedLevel, @AttackLevel, @HealthLevel, @BulletSpeedLevel, @CooldownLevel, @CurrentExp, @IsUnlocked);", connection))
+                {
+                    command.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                    command.Parameters.Add("@TankType", SqlDbType.Int).Value = (int)pair.Key;
+                    command.Parameters.Add("@Level", SqlDbType.Int).Value = tank.Level;
+                    command.Parameters.Add("@SpeedLevel", SqlDbType.Int).Value = tank.SpeedLevel;
+                    command.Parameters.Add("@AttackLevel", SqlDbType.Int).Value = tank.AttackLevel;
+                    command.Parameters.Add("@HealthLevel", SqlDbType.Int).Value = tank.HealthLevel;
+                    command.Parameters.Add("@BulletSpeedLevel", SqlDbType.Int).Value = tank.BulletSpeedLevel;
+                    command.Parameters.Add("@CooldownLevel", SqlDbType.Int).Value = tank.CooldownLevel;
+                    command.Parameters.Add("@CurrentExp", SqlDbType.Int).Value = tank.CurrentExp;
+                    command.Parameters.Add("@IsUnlocked", SqlDbType.Bit).Value = tank.IsUnlocked;
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private static void SaveLocalFallbackStageRecords(SqlConnection connection, int userId, PlayerData playerData)
+        {
+            foreach (StageRecord record in playerData.StageRecords)
+            {
+                using (SqlCommand command = new SqlCommand(@"MERGE BattleRecords AS target
+USING (SELECT @UserId AS UserId, @StageId AS StageId) AS source
+ON target.UserId = source.UserId AND target.StageId = source.StageId
+WHEN MATCHED THEN
+    UPDATE SET PlayerName = @PlayerName,
+               Points = CASE WHEN Points > @Points THEN Points ELSE @Points END,
+               GameMode = @GameMode,
+               Difficulty = @Difficulty,
+               BestTimeSeconds = CASE WHEN @BestTimeSeconds > 0 AND (BestTimeSeconds <= 0 OR @BestTimeSeconds < BestTimeSeconds) THEN @BestTimeSeconds ELSE BestTimeSeconds END,
+               CreatedAt = SYSUTCDATETIME()
+WHEN NOT MATCHED THEN
+    INSERT (UserId, PlayerName, Points, GameMode, Difficulty, Hearts, CreatedAt, StageId, BestTimeSeconds, Rank)
+    VALUES (@UserId, @PlayerName, @Points, @GameMode, @Difficulty, 0, SYSUTCDATETIME(), @StageId, @BestTimeSeconds, 0);", connection))
+                {
+                    command.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
+                    command.Parameters.Add("@PlayerName", SqlDbType.NVarChar, 50).Value = playerData.UserName;
+                    command.Parameters.Add("@Points", SqlDbType.Int).Value = Math.Max(0, record.BestScore);
+                    command.Parameters.Add("@GameMode", SqlDbType.Int).Value = (int)GameMode.SinglePlayer;
+                    command.Parameters.Add("@Difficulty", SqlDbType.Int).Value = Math.Max(0, record.StageId - 1);
+                    command.Parameters.Add("@StageId", SqlDbType.Int).Value = record.StageId;
+                    command.Parameters.Add("@BestTimeSeconds", SqlDbType.Int).Value = Math.Max(0, record.BestTimeSeconds);
+                    command.ExecuteNonQuery();
+                }
+
+                RebuildLocalFallbackStageRanks(connection, record.StageId);
+            }
+        }
+
+        private static void LoadLocalFallbackTanks(SqlConnection connection, PlayerData playerData)
+        {
+            using (SqlCommand command = new SqlCommand(@"SELECT TankType, Level, SpeedLevel, AttackLevel, HealthLevel, BulletSpeedLevel, CooldownLevel, CurrentExp, IsUnlocked
+FROM UserTanks
+WHERE UserId = @UserId", connection))
+            {
+                command.Parameters.Add("@UserId", SqlDbType.Int).Value = playerData.UserId;
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        TankType type = ParseTankType(reader.GetInt32(0));
+                        playerData.Tanks[type] = new PlayerTankData
+                        {
+                            Type = type,
+                            Level = reader.IsDBNull(1) ? 1 : reader.GetInt32(1),
+                            SpeedLevel = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                            AttackLevel = reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
+                            HealthLevel = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
+                            BulletSpeedLevel = reader.IsDBNull(5) ? 0 : reader.GetInt32(5),
+                            CooldownLevel = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                            CurrentExp = reader.IsDBNull(7) ? 0 : reader.GetInt32(7),
+                            IsUnlocked = !reader.IsDBNull(8) && reader.GetBoolean(8)
+                        };
+                    }
+                }
+            }
+        }
+
+        private static void LoadLocalFallbackRecords(SqlConnection connection, PlayerData playerData)
+        {
+            playerData.StageRecords = new List<StageRecord>();
+            playerData.LeaderboardEntries = new List<LeaderboardEntry>();
+            using (SqlCommand command = new SqlCommand(@"SELECT StageId, PlayerName, Points, BestTimeSeconds, Rank, UserId
+FROM BattleRecords
+WHERE GameMode = @GameMode
+ORDER BY StageId ASC, Rank ASC, Points DESC, BestTimeSeconds ASC, Id ASC", connection))
+            {
+                command.Parameters.Add("@GameMode", SqlDbType.Int).Value = (int)GameMode.SinglePlayer;
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        int stageId = reader.IsDBNull(0) ? 1 : reader.GetInt32(0);
+                        string userName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                        int score = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+                        int bestTime = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                        int rank = reader.IsDBNull(4) ? 0 : reader.GetInt32(4);
+                        int recordUserId = reader.IsDBNull(5) ? 0 : reader.GetInt32(5);
+
+                        playerData.LeaderboardEntries.Add(new LeaderboardEntry
+                        {
+                            StageId = stageId,
+                            UserName = userName,
+                            Score = score,
+                            BestTimeSeconds = bestTime,
+                            Rank = rank
+                        });
+
+                        if (recordUserId == playerData.UserId)
+                        {
+                            playerData.StageRecords.Add(new StageRecord
+                            {
+                                StageId = stageId,
+                                BestScore = score,
+                                BestTimeSeconds = bestTime,
+                                Rank = rank
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void RebuildLocalFallbackStageRanks(SqlConnection connection, int stageId)
+        {
+            using (SqlCommand command = new SqlCommand(@"WITH Ranked AS (
+    SELECT Id,
+           ROW_NUMBER() OVER (ORDER BY Points DESC, CASE WHEN BestTimeSeconds <= 0 THEN 2147483647 ELSE BestTimeSeconds END ASC, CreatedAt ASC, Id ASC) AS NewRank
+    FROM BattleRecords
+    WHERE StageId = @StageId
+)
+UPDATE br
+SET Rank = r.NewRank
+FROM BattleRecords br
+INNER JOIN Ranked r ON br.Id = r.Id;", connection))
+            {
+                command.Parameters.Add("@StageId", SqlDbType.Int).Value = stageId;
+                command.ExecuteNonQuery();
+            }
+        }
     }
 }
+
