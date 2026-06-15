@@ -6,6 +6,7 @@ namespace Peace_of_Tanks
 {
     internal sealed class AuthDialog : Form
     {
+        private const string LastUserNameFileName = "last_login_user.txt";
         private readonly TextBox userNameTextBox;
         private readonly TextBox passwordTextBox;
         private readonly TextBox confirmPasswordTextBox;
@@ -22,6 +23,9 @@ namespace Peace_of_Tanks
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             ClientSize = new Size(380, 250);
+            BackgroundImage = Peace_of_Tanks.Properties.Resources.Login_back;
+            BackgroundImageLayout = ImageLayout.Stretch;
+            Paint += AuthDialog_Paint;
 
             registerCheckBox = new CheckBox
             {
@@ -69,6 +73,8 @@ namespace Peace_of_Tanks
                 cancelButton
             });
 
+            StyleTextControls();
+
             AcceptButton = okButton;
             CancelButton = cancelButton;
             UpdateMode();
@@ -79,6 +85,8 @@ namespace Peace_of_Tanks
             request = null;
             using (AuthDialog dialog = new AuthDialog(defaultHost, defaultPort))
             {
+                dialog.userNameTextBox.Text = GetDefaultUserName();
+
                 while (dialog.ShowDialog() == DialogResult.OK)
                 {
                     string userName = dialog.userNameTextBox.Text.Trim();
@@ -130,6 +138,63 @@ namespace Peace_of_Tanks
             }
 
             return false;
+        }
+
+        public static void SaveLastUserName(string userName)
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+            {
+                return;
+            }
+
+            try
+            {
+                System.IO.File.WriteAllText(AppPaths.GetDataPath(LastUserNameFileName), userName.Trim());
+            }
+            catch
+            {
+            }
+        }
+
+        private static string GetDefaultUserName()
+        {
+            try
+            {
+                string path = AppPaths.GetDataPath(LastUserNameFileName);
+                if (System.IO.File.Exists(path))
+                {
+                    string lastUserName = System.IO.File.ReadAllText(path).Trim();
+                    if (!string.IsNullOrWhiteSpace(lastUserName))
+                    {
+                        return lastUserName;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return "玩家" + Environment.UserName;
+        }
+
+        private void StyleTextControls()
+        {
+            foreach (Control control in Controls)
+            {
+                if (control is Label || control is CheckBox)
+                {
+                    control.BackColor = Color.Transparent;
+                    control.ForeColor = Color.White;
+                }
+            }
+        }
+
+        private void AuthDialog_Paint(object sender, PaintEventArgs e)
+        {
+            using (SolidBrush shade = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
+            {
+                e.Graphics.FillRectangle(shade, ClientRectangle);
+            }
         }
 
         private void UpdateMode()

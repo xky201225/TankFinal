@@ -10,6 +10,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Drawing.Text;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 
 namespace Peace_of_Tanks
@@ -18,6 +19,9 @@ namespace Peace_of_Tanks
     {
         BinaryFormatter formatter = new BinaryFormatter();
         private const int PlayerMovementStepsPerFrame = 8;
+        private const int BattlefieldWidth = 1000;
+        private const int BattlefieldHeight = 740;
+        private const int BattleBannerDurationMs = 1500;
         private bool timerResolutionRaised;
 
         [DllImport("winmm.dll")]
@@ -32,6 +36,9 @@ namespace Peace_of_Tanks
         int menu = 0;  // 胁褘斜褉邪薪薪褘泄 锌褍薪泻褌 屑械薪褞
         int modeMenu = 0; // 褌械泻褍褖械械 屑械薪褞
         bool secondPlayer = false, firstPlayer = true; // 芯褌芯斜褉邪卸械薪懈械 锌械褉胁芯谐芯 懈 胁褌芯褉芯谐芯 懈谐褉芯泻邪
+        private const int LevelTransitionDelayMs = 3000;
+        private const int VersusEnemyActiveLimit = 3;
+        private const int VersusEnemySpawnDelayLegacyTicks = 160;
         private const int GameOverSettlementDelayLegacyTicks = 12;
         int gameoverX = 355, gameoverY = 10, pauseGameOver = GameTiming.ScaleLegacyTicks(GameOverSettlementDelayLegacyTicks); // 泻芯芯褉写懈薪邪褌褘 锌谢邪褕泻邪 GameOver
 
@@ -66,7 +73,7 @@ namespace Peace_of_Tanks
         private int stageScore;
         private int stageDamageTaken;
         private DateTime stageStartedAtUtc = DateTime.UtcNow;
-        private int survivalWaveDelayTicks;
+        private DateTime survivalNextWaveAtUtc = DateTime.MinValue;
         private string battleBannerText = string.Empty;
         private int battleBannerTicks;
         private int emergencySpawnCooldownTicks;
@@ -357,7 +364,7 @@ namespace Peace_of_Tanks
 
             if (IsNetworkGuest)
             {
-                float aimAngle = CalculateAimAngle(e.Location, guestInputState.Up || guestInputState.Down || guestInputState.Left || guestInputState.Right ? player1 : null);
+                float aimAngle = CalculateAimAngle(ToBattlefieldPoint(e.Location), guestInputState.Up || guestInputState.Down || guestInputState.Left || guestInputState.Right ? player1 : null);
                 if (Math.Abs(guestInputState.AimAngleDegrees - aimAngle) > 0.1f)
                 {
                     guestInputState.AimAngleDegrees = aimAngle;
@@ -407,7 +414,24 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            player.SetRotationDegrees(CalculateAimAngle(mousePosition, player));
+            player.SetRotationDegrees(CalculateAimAngle(ToBattlefieldPoint(mousePosition), player));
+        }
+
+        private Rectangle GetBattlefieldViewport()
+        {
+            int width = Math.Min(ClientSize.Width, BattlefieldWidth);
+            int height = Math.Min(ClientSize.Height, BattlefieldHeight);
+            return new Rectangle(
+                Math.Max(0, (ClientSize.Width - width) / 2),
+                Math.Max(0, (ClientSize.Height - height) / 2),
+                width,
+                height);
+        }
+
+        private Point ToBattlefieldPoint(Point clientPoint)
+        {
+            Rectangle viewport = GetBattlefieldViewport();
+            return new Point(clientPoint.X - viewport.X, clientPoint.Y - viewport.Y);
         }
 
         private static float CalculateAimAngle(Point mousePosition, BaseTank tank)
@@ -528,7 +552,7 @@ namespace Peace_of_Tanks
             else
                 BackgroundImage = Peace_of_Tanks.Properties.Resources.blackSquare;
 
-            Text = "和平坦克大战";
+            Text = "坦克大战";
 
             RichAbout.Text = "        项目说明        \n\n" +
                              "本项目基于原坦克项目的核心玩法，\n\n" +
@@ -1194,7 +1218,7 @@ namespace Peace_of_Tanks
             survivalWave = 0;
             survivalBossWaveActive = false;
             survivalVictoryAchieved = false;
-            survivalWaveDelayTicks = 0;
+            survivalNextWaveAtUtc = DateTime.MinValue;
             battleBannerText = string.Empty;
             battleBannerTicks = 0;
             emergencySpawnCooldownTicks = 0;
@@ -1204,7 +1228,7 @@ namespace Peace_of_Tanks
         private void ShowBattleBanner(string text)
         {
             battleBannerText = text ?? string.Empty;
-            battleBannerTicks = string.IsNullOrEmpty(battleBannerText) ? 0 : GameTiming.ScaleLegacyTicks(120);
+            battleBannerTicks = string.IsNullOrEmpty(battleBannerText) ? 0 : Math.Max(1, BattleBannerDurationMs / GameTiming.TimerIntervalMs);
         }
 
         private void InitializeBattleFlow()
@@ -1216,9 +1240,21 @@ namespace Peace_of_Tanks
             }
             else
             {
-                setting.countEnemies = 0;
-                activeEnemyLimit = 0;
-                timeSpawn = 0;
+                if (ShouldSpawnNeutralEnemiesInVersus())
+                {
+                    setting.countEnemies = VersusEnemyActiveLimit;
+                    activeEnemyLimit = VersusEnemyActiveLimit;
+                    setting.speedEnemy = Math.Max(2, setting.speedEnemy);
+                    setting.timeSpawn = GameTiming.ScaleLegacyTicks(VersusEnemySpawnDelayLegacyTicks);
+                    timeSpawn = setting.timeSpawn;
+                    RefillEnemiesIfNeeded();
+                }
+                else
+                {
+                    setting.countEnemies = 0;
+                    activeEnemyLimit = 0;
+                    timeSpawn = 0;
+                }
             }
         }
 
@@ -1234,11 +1270,11 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            if (survivalWaveDelayTicks > 0)
+            if (survivalNextWaveAtUtc != DateTime.MinValue)
             {
-                survivalWaveDelayTicks--;
-                if (survivalWaveDelayTicks == 0)
+                if (DateTime.UtcNow >= survivalNextWaveAtUtc)
                 {
+                    survivalNextWaveAtUtc = DateTime.MinValue;
                     StartNextSurvivalWave();
                 }
                 return;
@@ -1255,7 +1291,7 @@ namespace Peace_of_Tanks
                 }
 
                 ApplySurvivalWaveUpgrade(survivalWave);
-                survivalWaveDelayTicks = GameTiming.ScaleLegacyTicks(36);
+                survivalNextWaveAtUtc = DateTime.UtcNow.AddMilliseconds(LevelTransitionDelayMs);
             }
         }
 
@@ -1553,11 +1589,21 @@ namespace Peace_of_Tanks
             {
                 BackColor = Color.FromArgb(225, 12, 18, 28),
                 Location = new Point(0, 0),
-                Size = ClientSize
+                Size = ClientSize,
+                Dock = DockStyle.Fill
             };
             settlementControls.Add(shade);
             Controls.Add(shade);
             shade.BringToFront();
+
+            Panel content = new Panel
+            {
+                BackColor = Color.Transparent,
+                Location = new Point(Math.Max(24, (ClientSize.Width - 760) / 2), Math.Max(24, (ClientSize.Height - 560) / 2)),
+                Size = new Size(760, 560),
+                Anchor = AnchorStyles.None
+            };
+            shade.Controls.Add(content);
 
             Label title = new Label
             {
@@ -1566,9 +1612,9 @@ namespace Peace_of_Tanks
                 ForeColor = Color.White,
                 BackColor = Color.Transparent,
                 AutoSize = true,
-                Location = new Point(310, 105)
+                Location = new Point(260, 20)
             };
-            shade.Controls.Add(title);
+            content.Controls.Add(title);
 
             Label expGain = new Label
             {
@@ -1577,34 +1623,34 @@ namespace Peace_of_Tanks
                 ForeColor = Color.FromArgb(255, 224, 146),
                 BackColor = Color.Transparent,
                 AutoSize = true,
-                Location = new Point(505, 118)
+                Location = new Point(440, 35)
             };
-            shade.Controls.Add(expGain);
+            content.Controls.Add(expGain);
 
             string[] headers = { "排名", "玩家", "伤害", "击杀", "死亡", "KD" };
             int[] xs = { 62, 148, 285, 402, 512, 612 };
             for (int i = 0; i < headers.Length; i++)
             {
-                Label header = CreateSettlementLabel(headers[i], new Point(xs[i], 190), 13, Color.FromArgb(255, 224, 146), FontStyle.Bold);
-                shade.Controls.Add(header);
+                Label header = CreateSettlementLabel(headers[i], new Point(xs[i], 120), 13, Color.FromArgb(255, 224, 146), FontStyle.Bold);
+                content.Controls.Add(header);
             }
 
             for (int i = 0; i < results.Count; i++)
             {
                 PlayerResultSnapshot result = results[i];
-                int y = 238 + i * 56;
+                int y = 168 + i * 56;
                 Color rowColor = i == 0 ? Color.White : Color.FromArgb(210, 224, 236);
                 string displayName = result.Name;
                 if (networkMode && ((IsNetworkGuest && result.Name == "玩家2") || (IsNetworkHost && result.Name == "玩家1")))
                 {
                     displayName += "（己方）";
                 }
-                shade.Controls.Add(CreateSettlementLabel(result.Rank.ToString(), new Point(xs[0], y), 13, rowColor, FontStyle.Bold));
-                shade.Controls.Add(CreateSettlementLabel(displayName, new Point(xs[1], y), 13, rowColor, FontStyle.Bold));
-                shade.Controls.Add(CreateSettlementLabel(result.Damage.ToString(), new Point(xs[2], y), 13, rowColor, FontStyle.Regular));
-                shade.Controls.Add(CreateSettlementLabel(result.Kills.ToString(), new Point(xs[3], y), 13, rowColor, FontStyle.Regular));
-                shade.Controls.Add(CreateSettlementLabel(result.Deaths.ToString(), new Point(xs[4], y), 13, rowColor, FontStyle.Regular));
-                shade.Controls.Add(CreateSettlementLabel(CalculateKd(result.Kills, result.Deaths).ToString("0.00"), new Point(xs[5], y), 13, rowColor, FontStyle.Regular));
+                content.Controls.Add(CreateSettlementLabel(result.Rank.ToString(), new Point(xs[0], y), 13, rowColor, FontStyle.Bold));
+                content.Controls.Add(CreateSettlementLabel(displayName, new Point(xs[1], y), 13, rowColor, FontStyle.Bold));
+                content.Controls.Add(CreateSettlementLabel(result.Damage.ToString(), new Point(xs[2], y), 13, rowColor, FontStyle.Regular));
+                content.Controls.Add(CreateSettlementLabel(result.Kills.ToString(), new Point(xs[3], y), 13, rowColor, FontStyle.Regular));
+                content.Controls.Add(CreateSettlementLabel(result.Deaths.ToString(), new Point(xs[4], y), 13, rowColor, FontStyle.Regular));
+                content.Controls.Add(CreateSettlementLabel(CalculateKd(result.Kills, result.Deaths).ToString("0.00"), new Point(xs[5], y), 13, rowColor, FontStyle.Regular));
             }
 
             Button back = new Button
@@ -1614,7 +1660,7 @@ namespace Peace_of_Tanks
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(190, 126, 84, 26),
                 FlatStyle = FlatStyle.Flat,
-                Location = new Point(325, 610),
+                Location = new Point(305, 470),
                 Size = new Size(150, 42)
             };
             back.FlatAppearance.BorderColor = Color.FromArgb(255, 205, 99);
@@ -1623,7 +1669,7 @@ namespace Peace_of_Tanks
                 returnToLobby = true;
                 Close();
             };
-            shade.Controls.Add(back);
+            content.Controls.Add(back);
             back.BringToFront();
         }
 
@@ -1814,7 +1860,9 @@ namespace Peace_of_Tanks
 
         private bool IsTankAreaBlocked(int x, int y, IEnumerable<BaseTank> existingTanks)
         {
-            if (x < ClientRectangle.Left || y < ClientRectangle.Top || x + 50 > ClientRectangle.Right || y + 50 > ClientRectangle.Bottom)
+            Rectangle bounds = GetBattlefieldViewport();
+            bounds.Location = Point.Empty;
+            if (x < bounds.Left || y < bounds.Top || x + 50 > bounds.Right || y + 50 > bounds.Bottom)
             {
                 return true;
             }
@@ -1865,13 +1913,15 @@ namespace Peace_of_Tanks
 
         private Point FindSafeSpawnPoint(int desiredX, int desiredY, IEnumerable<BaseTank> existingTanks)
         {
+            Rectangle bounds = GetBattlefieldViewport();
+            bounds.Location = Point.Empty;
             int[] offsets = { 0, 60, -60, 120, -120, 180, -180 };
             foreach (int offsetY in offsets)
             {
                 foreach (int offsetX in offsets)
                 {
-                    int x = Math.Max(ClientRectangle.Left + 25, Math.Min(ClientRectangle.Right - 75, desiredX + offsetX));
-                    int y = Math.Max(ClientRectangle.Top + 25, Math.Min(ClientRectangle.Bottom - 75, desiredY + offsetY));
+                    int x = Math.Max(bounds.Left + 25, Math.Min(bounds.Right - 75, desiredX + offsetX));
+                    int y = Math.Max(bounds.Top + 25, Math.Min(bounds.Bottom - 75, desiredY + offsetY));
                     if (!IsTankAreaBlocked(x, y, existingTanks))
                     {
                         return new Point(x, y);
@@ -1926,11 +1976,11 @@ namespace Peace_of_Tanks
 
             if (index == 0 || index == 1)
             {
-                y = Math.Max(50, Math.Min(ClientRectangle.Bottom - 100, y + offset));
+                y = Math.Max(50, Math.Min(BattlefieldHeight - 100, y + offset));
             }
             else
             {
-                x = Math.Max(50, Math.Min(ClientRectangle.Right - 100, x + offset));
+                x = Math.Max(50, Math.Min(BattlefieldWidth - 100, x + offset));
             }
             Point spawnPoint = FindSafeSpawnPoint(x, y, tanks.Concat(enemies));
 
@@ -1943,7 +1993,10 @@ namespace Peace_of_Tanks
                 attackOverride ?? config.BaseAttack);
             enemy.TankType = enemyType;
             enemy.message.aggressionLevel = setting != null ? setting.difficulty + 1 : 1;
-            enemy.message.aggroRange = 220 + enemy.message.aggressionLevel * 70;
+            int originalAggroRange = 220 + enemy.message.aggressionLevel * 70;
+            enemy.message.aggroRange = (!networkMode && currentGameMode == GameMode.SinglePlayer)
+                ? Collisions.BattlefieldWidth + Collisions.BattlefieldHeight
+                : originalAggroRange;
             enemy.message.attackRange = 150 + enemy.message.aggressionLevel * 45;
             enemy.message.isBoss = healthOverride.HasValue && (healthOverride.Value >= 180 || enemyType == TankType.Purple);
             enemy.IsBossEntity = enemy.message.isBoss;
@@ -1962,7 +2015,12 @@ namespace Peace_of_Tanks
 
         private bool ShouldKeepEnemyCountStable()
         {
-            return false;
+            return ShouldSpawnNeutralEnemiesInVersus();
+        }
+
+        private bool ShouldSpawnNeutralEnemiesInVersus()
+        {
+            return networkMode && IsVersusBattle;
         }
 
         private bool TryEmergencySpawnEnemy()
@@ -1992,6 +2050,11 @@ namespace Peace_of_Tanks
             if (!ShouldKeepEnemyCountStable())
             {
                 setting.countEnemies--;
+            }
+
+            if (ShouldSpawnNeutralEnemiesInVersus())
+            {
+                return;
             }
 
             if (shooter == 1)
@@ -2032,7 +2095,8 @@ namespace Peace_of_Tanks
 
             while (enemies.Count < activeEnemyLimit)
             {
-                SpawnEnemyAt(enemies.Count);
+                int spawnIndex = ShouldSpawnNeutralEnemiesInVersus() ? random.Next(0, Math.Max(4, activeEnemyLimit * 2)) : enemies.Count;
+                SpawnEnemyAt(spawnIndex);
             }
         }
 
@@ -2278,7 +2342,6 @@ namespace Peace_of_Tanks
             }
 
             DrawBossHealthBar();
-            DrawDamageTexts();
             DrawSkillHud();
 
             if (!ShouldKeepEnemyCountStable() && setting.countEnemies > 0 && enemies.Count < activeEnemyLimit)
@@ -2363,6 +2426,10 @@ namespace Peace_of_Tanks
             if(DelayEvent != null)
                 DelayEvent(); 
 
+            Rectangle battlefieldViewport = GetBattlefieldViewport();
+            GraphicsState worldState = grMemory.Save();
+            grMemory.TranslateTransform(battlefieldViewport.X, battlefieldViewport.Y);
+
             /////////////////////////////////////// 芯褌褉懈褋芯胁泻邪
 
             for (int i = 0; i < boxes.Count; i++) //芯褌褉懈褋芯胁泻邪 褟褖懈泻芯胁
@@ -2400,6 +2467,8 @@ namespace Peace_of_Tanks
 
             for(int i = 0; i < animations.Count; i++) // 芯褌褉懈褋芯胁泻邪 邪薪懈屑邪褑懈懈
                 animations[i].Draw(grMemory);
+            DrawDamageTexts();
+            grMemory.Restore(worldState);
 
             ////////////////////////////////////////////////////////////////////////锌褉芯胁械褉泻邪 泻芯薪褑邪 懈谐褉褘
 
@@ -2422,7 +2491,7 @@ namespace Peace_of_Tanks
                 if (!survivalCleared)
                 {
                     gameoverY = Math.Min(140, gameoverY + 24);
-                    grMemory.DrawImage(gameover, gameoverX, gameoverY);
+                    grMemory.DrawImage(gameover, battlefieldViewport.X + gameoverX, battlefieldViewport.Y + gameoverY);
                 }
 
                 pauseGameOver -= 1;
@@ -2591,10 +2660,13 @@ namespace Peace_of_Tanks
         public MainWindow(GameLaunchOptions options)
         {
             InitializeComponent();
+            TimerPause.Interval = LevelTransitionDelayMs;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
             DoubleBuffered = true;
             ResizeRedraw = true;
+            KeyPreview = true;
             UpdateStyles();
+            Resize += MainWindow_Resize;
             timerResolutionRaised = timeBeginPeriod(1) == 0;
 
             launchOptions = options ?? new GameLaunchOptions();
@@ -2652,6 +2724,25 @@ namespace Peace_of_Tanks
             fontsProjects();
             fonts();
             InitializeNetworkUi();
+        }
+
+        private void MainWindow_Resize(object sender, EventArgs e)
+        {
+            if (WindowState == FormWindowState.Minimized || backgroundMain == null || grMemory == null)
+            {
+                return;
+            }
+
+            if (modeMenu == 3)
+            {
+                RefreshBattleBackground();
+                Invalidate();
+            }
+            else
+            {
+                ConfigureChineseLayout();
+                Invalidate();
+            }
         }
 
         private void StartFromLaunchOptions()

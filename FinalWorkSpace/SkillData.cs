@@ -75,9 +75,9 @@ namespace Peace_of_Tanks
                 case TankSkillType.Overdrive:
                     return "短时间内提升伤害并缩短开火间隔。";
                 case TankSkillType.Lifesteal:
-                    return "短时间内按造成伤害的一部分回复自身生命。";
+                    return "短时间内按造成伤害的一部分恢复自身生命。";
                 default:
-                    return "立即回复一部分生命值。";
+                    return "立即恢复一部分生命值。";
             }
         }
     }

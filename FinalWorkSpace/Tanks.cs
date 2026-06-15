@@ -223,7 +223,11 @@ namespace Peace_of_Tanks
                 return true;
             }
 
-            Rectangle bounds = mainWindow.ClientRectangle;
+            Rectangle bounds = new Rectangle(
+                mainWindow.ClientRectangle.Left,
+                mainWindow.ClientRectangle.Top,
+                Math.Min(mainWindow.ClientRectangle.Width, Collisions.BattlefieldWidth),
+                Math.Min(mainWindow.ClientRectangle.Height, Collisions.BattlefieldHeight));
             return nextX >= bounds.Left
                 && nextY >= bounds.Top
                 && nextX + TankSize <= bounds.Right
@@ -621,8 +625,6 @@ namespace Peace_of_Tanks
         private const double EnemyFireIntervalSeconds = 1.0;
         private static readonly Random ranNumber = new Random();
 
-        int goToPlayer;
-
         public EnemyEventArgs message;
 
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
@@ -631,7 +633,7 @@ namespace Peace_of_Tanks
             message = new EnemyEventArgs();
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
-            goToPlayer = ranNumber.Next(1, 3);
+            message.goToPlayer = ranNumber.Next(1, 3);
             message.patrolAngleDegrees = ranNumber.Next(0, 360);
         }
 
@@ -642,7 +644,7 @@ namespace Peace_of_Tanks
             message = new EnemyEventArgs();
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
-            goToPlayer = ranNumber.Next(1, 3);
+            message.goToPlayer = ranNumber.Next(1, 3);
             message.patrolAngleDegrees = ranNumber.Next(0, 360);
         }
 
@@ -655,6 +657,11 @@ namespace Peace_of_Tanks
             if (EnemyEventArgs.players == 0)
             {
                 return false;
+            }
+
+            if (EnemyEventArgs.players == 3 && message.goToPlayer != 1 && message.goToPlayer != 2)
+            {
+                message.goToPlayer = ranNumber.Next(1, 3);
             }
 
             if (EnemyEventArgs.players == 1 || (EnemyEventArgs.players == 3 && message.goToPlayer == 1))

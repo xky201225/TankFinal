@@ -80,7 +80,7 @@ namespace Peace_of_Tanks
             // 
             // TimerPause
             // 
-            this.TimerPause.Interval = 1500;
+            this.TimerPause.Interval = 3000;
             this.TimerPause.Tick += new System.EventHandler(this.TimerPause_Tick);
             // 
             // EnterName1
@@ -444,10 +444,11 @@ namespace Peace_of_Tanks
             this.Controls.Add(this.PicButton2Player);
             this.Controls.Add(this.PicButton1Player);
             this.ForeColor = System.Drawing.SystemColors.Window;
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
+            this.MaximizeBox = true;
+            this.MinimumSize = new System.Drawing.Size(1000, 740);
             this.Name = "MainWindow";
-            this.Text = "和平坦克大战";
+            this.Text = "坦克大战";
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.MainWindow_FormClosed);
             this.Load += new System.EventHandler(this.MainWindow_Load);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.MainWindow_KeyDown);

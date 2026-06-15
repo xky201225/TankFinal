@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
@@ -11,6 +12,7 @@ namespace Peace_of_Tanks
     {
         private const string DefaultChatHost = "127.0.0.1";
         private const int DefaultChatPort = 51888;
+        private const int EM_LINESCROLL = 0x00B6;
 
         private readonly PlayerData playerData;
         private readonly List<Control> pageControls = new List<Control>();
@@ -20,6 +22,7 @@ namespace Peace_of_Tanks
         private Label expLabel;
         private TcpGameClient chatClient;
         private RichTextBox chatLog;
+        private HudScrollIndicator chatScrollIndicator;
         private TextBox chatInput;
         private Label chatStatusLabel;
         private string chatPlayerName;
@@ -28,6 +31,10 @@ namespace Peace_of_Tanks
         private bool lobbyServerPromptShown;
         private bool useAuthenticatedServer;
         private BattleRuleMode selectedNetworkRule = BattleRuleMode.Versus;
+        private int selectedNetworkStage = 1;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         public GameMode SelectedMode { get { return selectedMode; } }
         public TankType SelectedTank { get { return selectedTank; } }
@@ -66,8 +73,8 @@ namespace Peace_of_Tanks
             ClientSize = new Size(1280, 720);
             MinimumSize = new Size(1100, 660);
             StartPosition = FormStartPosition.CenterScreen;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
             DoubleBuffered = true;
             Resize += (s, e) => Invalidate();
             Shown += GameLobby_Shown;
@@ -140,7 +147,7 @@ namespace Peace_of_Tanks
 
             Label titleLabel = new Label
             {
-                Text = "和平坦克大战",
+                Text = "坦克大战",
                 Font = new Font("Microsoft YaHei UI", 22, FontStyle.Bold),
                 ForeColor = Color.White,
                 BackColor = Color.Transparent,
@@ -162,6 +169,7 @@ namespace Peace_of_Tanks
 
             pageControls.Clear();
             chatLog = null;
+            chatScrollIndicator = null;
             chatInput = null;
             chatStatusLabel = null;
         }
@@ -195,6 +203,7 @@ namespace Peace_of_Tanks
                 false,
                 (s, e) => ShowTankLibraryPage()));
 
+            pageControls.Add(CreateSelectedTankInfoPanel());
             pageControls.Add(CreateChatPanel());
 
             AddPageControls();
@@ -345,10 +354,11 @@ namespace Peace_of_Tanks
         {
             HudPanel panel = new HudPanel
             {
-                Size = new Size(520, 108),
-                Location = new Point(24, ClientSize.Height - 122),
+                Size = new Size(520, 132),
+                Location = new Point(24, ClientSize.Height - 146),
                 BackColor = Color.FromArgb(14, 24, 36)
             };
+            panel.MouseWheel += ChatLog_MouseWheel;
 
             chatLog = new RichTextBox
             {
@@ -358,10 +368,25 @@ namespace Peace_of_Tanks
                 ForeColor = Color.FromArgb(255, 223, 130),
                 Font = new Font("Microsoft YaHei UI", 10, FontStyle.Bold),
                 Location = new Point(14, 10),
-                Size = new Size(492, 42),
-                ScrollBars = RichTextBoxScrollBars.Vertical
+                Size = new Size(482, 62),
+                ScrollBars = RichTextBoxScrollBars.None
             };
+            chatLog.TextChanged += (s, e) => UpdateChatScrollIndicator();
+            chatLog.MouseEnter += (s, e) => chatLog.Focus();
+            chatLog.MouseWheel += ChatLog_MouseWheel;
+            chatLog.VScroll += (s, e) => UpdateChatScrollIndicator();
             panel.Controls.Add(chatLog);
+
+            chatScrollIndicator = new HudScrollIndicator
+            {
+                Location = new Point(500, 10),
+                Size = new Size(6, 62),
+                BackColor = Color.FromArgb(10, 18, 28)
+            };
+            chatScrollIndicator.ScrollRequested += ScrollChatToLine;
+            chatScrollIndicator.MouseEnter += (s, e) => chatLog.Focus();
+            chatScrollIndicator.MouseWheel += ChatLog_MouseWheel;
+            panel.Controls.Add(chatScrollIndicator);
 
             chatInput = new TextBox
             {
@@ -369,7 +394,7 @@ namespace Peace_of_Tanks
                 BackColor = Color.FromArgb(25, 36, 50),
                 ForeColor = Color.White,
                 Font = new Font("Microsoft YaHei UI", 10, FontStyle.Regular),
-                Location = new Point(14, 62),
+                Location = new Point(14, 84),
                 Size = new Size(370, 25)
             };
             chatInput.KeyDown += (s, e) =>
@@ -382,7 +407,7 @@ namespace Peace_of_Tanks
             };
             panel.Controls.Add(chatInput);
 
-            Button send = CreateSmallButton("发送", new Point(394, 60), true);
+            Button send = CreateSmallButton("发送", new Point(394, 82), true);
             send.Size = new Size(72, 28);
             send.Click += (s, e) => SendLobbyChat();
             panel.Controls.Add(send);
@@ -394,12 +419,58 @@ namespace Peace_of_Tanks
                 ForeColor = Color.FromArgb(170, 180, 195),
                 BackColor = Color.FromArgb(14, 24, 36),
                 AutoSize = true,
-                Location = new Point(14, 88)
+                Location = new Point(14, 112)
             };
             panel.Controls.Add(chatStatusLabel);
 
             AppendChat("系统", "大厅聊天会通过服务器广播给所有在线用户。");
             return panel;
+        }
+
+        private void UpdateChatScrollIndicator()
+        {
+            if (chatLog == null || chatScrollIndicator == null)
+            {
+                return;
+            }
+
+            int totalLines = Math.Max(1, chatLog.GetLineFromCharIndex(chatLog.TextLength) + 1);
+            int firstLine = chatLog.GetLineFromCharIndex(chatLog.GetCharIndexFromPosition(new Point(1, 1)));
+            int lastLine = chatLog.GetLineFromCharIndex(chatLog.GetCharIndexFromPosition(new Point(1, Math.Max(1, chatLog.Height - 2))));
+            int visibleLines = Math.Max(1, lastLine - firstLine + 1);
+
+            chatScrollIndicator.SetScrollState(firstLine, visibleLines, totalLines);
+        }
+
+        private void ScrollChatToLine(int targetLine)
+        {
+            if (chatLog == null)
+            {
+                return;
+            }
+
+            int clampedLine = Math.Max(0, Math.Min(targetLine, chatLog.Lines.Length - 1));
+            int charIndex = chatLog.GetFirstCharIndexFromLine(clampedLine);
+            if (charIndex < 0)
+            {
+                charIndex = chatLog.TextLength;
+            }
+
+            chatLog.SelectionStart = charIndex;
+            chatLog.ScrollToCaret();
+            UpdateChatScrollIndicator();
+        }
+
+        private void ChatLog_MouseWheel(object sender, MouseEventArgs e)
+        {
+            if (chatLog == null)
+            {
+                return;
+            }
+
+            int lines = e.Delta > 0 ? -3 : 3;
+            SendMessage(chatLog.Handle, EM_LINESCROLL, IntPtr.Zero, new IntPtr(lines));
+            UpdateChatScrollIndicator();
         }
 
         private HudMainButton CreateMainButton(string title, string subtitle, Image icon, Point location, bool primary, EventHandler click)
@@ -456,15 +527,15 @@ namespace Peace_of_Tanks
                 Location = new Point(330, 82)
             });
 
-            pageControls.Add(CreatePanelLabel("竞技：双人对战，先达成击杀目标的一方获胜。    协作：双人清怪推进波次，击败最终 Boss 即通关。", new Point(330, 145), 10, Color.FromArgb(205, 220, 235), FontStyle.Regular));
+            pageControls.Add(CreatePanelLabel("竞技：双人对战，先达成击杀目标的一方获胜。    协作：双人清怪推进波次，击败最终 Boss 即通关。", new Point(330, 168), new Size(650, 44), 10, Color.FromArgb(205, 220, 235), FontStyle.Regular));
 
-            pageControls.Add(CreatePanelButton("竞技模式", "双人对战，优先达成击杀目标者获胜。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
+            pageControls.Add(CreatePanelButton("竞技模式", "双人对战，优先达成击杀目标者获胜。", new Point(330, 230), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
             {
                 selectedNetworkRule = BattleRuleMode.Versus;
                 ShowNetworkRoomPage();
             }));
 
-            pageControls.Add(CreatePanelButton("协作模式", "双人组队打怪，共同推进三关并击败每关 Boss。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) =>
+            pageControls.Add(CreatePanelButton("协作模式", "双人组队打怪，共同推进六关并击败每关 Boss。", new Point(650, 230), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) =>
             {
                 selectedNetworkRule = BattleRuleMode.Survival;
                 ShowCoopStagePage();
@@ -487,10 +558,12 @@ namespace Peace_of_Tanks
                 Location = new Point(260, 82)
             });
 
-            for (int stage = 1; stage <= 3; stage++)
+            for (int stage = 1; stage <= BattleMapFactory.StageMapCount; stage++)
             {
                 bool unlocked = playerData.IsStageUnlocked(stage);
-                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关 - " + BattleMapFactory.GetStageMapName(stage)) : ("第" + stage + "关 未解锁"), new Point(330, 170 + (stage - 1) * 72), unlocked);
+                int column = (stage - 1) % 2;
+                int row = (stage - 1) / 2;
+                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关 - " + BattleMapFactory.GetStageMapName(stage)) : ("第" + stage + "关 未解锁"), new Point(260 + column * 390, 170 + row * 64), unlocked);
                 stageButton.Size = new Size(370, 42);
                 int capturedStage = stage;
                 stageButton.Click += (s, e) => ShowNetworkRoomPage(capturedStage);
@@ -508,14 +581,14 @@ namespace Peace_of_Tanks
 
             HudPanel panel = new HudPanel
             {
-                Size = new Size(240, 250),
+                Size = new Size(240, 360),
                 Location = new Point(40, 180),
                 BackColor = Color.FromArgb(20, 28, 42)
             };
 
             panel.Controls.Add(CreatePanelLabel("单人关卡榜", new Point(12, 10), 10, Color.White, FontStyle.Bold));
             int y = 34;
-            for (int stage = 1; stage <= 3; stage++)
+            for (int stage = 1; stage <= BattleMapFactory.StageMapCount; stage++)
             {
                 LeaderboardEntry best = playerData.LeaderboardEntries.Where(r => r.StageId == stage).OrderBy(r => r.Rank <= 0 ? int.MaxValue : r.Rank).ThenByDescending(r => r.Score).FirstOrDefault();
                 string bestText = best == null ? "暂无" : (best.UserName + " " + best.Score + "分");
@@ -539,6 +612,7 @@ namespace Peace_of_Tanks
             ClearPage();
 
             bool versusMode = selectedNetworkRule == BattleRuleMode.Versus;
+            selectedNetworkStage = Math.Max(1, Math.Min(BattleMapFactory.StageMapCount, selectedStage));
             pageControls.Add(new HudHeader
             {
                 Title = versusMode ? "联机竞技" : "联机协作",
@@ -547,11 +621,11 @@ namespace Peace_of_Tanks
                 Location = new Point(330, 82)
             });
 
-            pageControls.Add(CreatePanelButton("创建房间", "设置服务器、房间号和地图，创建后等待另一名玩家加入。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) => ShowCreateRoomPage()));
+            pageControls.Add(CreatePanelButton("创建房间", versusMode ? "设置服务器、房间号和地图，创建后等待另一名玩家加入。" : "设置服务器和房间号，使用当前关卡自带地图等待队友加入。", new Point(330, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_people, (s, e) => ShowCreateRoomPage()));
 
             pageControls.Add(CreatePanelButton("搜索房间", "自动搜索当前服务器里可加入的房间。", new Point(650, 190), Peace_of_Tanks.Properties.Resources.lobby_icon_match, (s, e) =>
             {
-                StartNetworkMatch(NetworkJoinMode.Search, string.Empty, versusMode ? NetworkDifficulty.Easy : NetworkDifficulty.Medium);
+                StartNetworkMatch(NetworkJoinMode.Search, string.Empty, versusMode ? NetworkDifficulty.Easy : GetDifficultyForStage(selectedNetworkStage));
             }));
 
             pageControls.Add(CreateJoinRoomPanel());
@@ -565,14 +639,14 @@ namespace Peace_of_Tanks
 
             HudPanel panel = new HudPanel
             {
-                Size = new Size(600, 210),
+                Size = new Size(600, 330),
                 Location = new Point(330, 420),
                 BackColor = Color.FromArgb(14, 24, 36)
             };
 
             panel.Controls.Add(CreatePanelLabel("关卡排行榜", new Point(22, 16), 16, Color.White, FontStyle.Bold));
             int y = 48;
-            for (int stage = 1; stage <= 3; stage++)
+            for (int stage = 1; stage <= BattleMapFactory.StageMapCount; stage++)
             {
                 LeaderboardEntry best = playerData.LeaderboardEntries.Where(r => r.StageId == stage).OrderBy(r => r.Rank <= 0 ? int.MaxValue : r.Rank).ThenByDescending(r => r.Score).FirstOrDefault();
                 string bestScoreText = best == null ? "暂无" : (best.UserName + "  " + best.Score + " 分");
@@ -611,7 +685,7 @@ namespace Peace_of_Tanks
                     return;
                 }
 
-                StartNetworkMatch(NetworkJoinMode.JoinByRoomId, roomId, NetworkDifficulty.Easy);
+                StartNetworkMatch(NetworkJoinMode.JoinByRoomId, roomId, selectedNetworkRule == BattleRuleMode.Survival ? GetDifficultyForStage(selectedNetworkStage) : NetworkDifficulty.Easy);
             };
             panel.Controls.Add(join);
 
@@ -633,13 +707,14 @@ namespace Peace_of_Tanks
             });
 
             HudPanel panel = new HudPanel { Size = new Size(420, 470), Location = new Point(285, 160), BackColor = Color.FromArgb(14, 24, 36) };
+            bool versusMode = selectedNetworkRule == BattleRuleMode.Versus;
             TextBox host = AddField(panel, "服务器地址", lobbyServerHost, 24, 24);
             TextBox port = AddField(panel, "端口", lobbyServerPort.ToString(), 230, 24);
             TextBox name = AddField(panel, "玩家名称", chatPlayerName, 24, 92);
             TextBox roomId = AddField(panel, "房间号", "ROOM-" + DateTime.Now.ToString("HHmm"), 230, 92);
 
             ComboBox difficulty = AddCombo(panel, "难度", new object[] { "简单", "中等", "困难" }, 24, 164);
-            ComboBox mapSelect = AddCombo(panel, "地图", CreateSystemMapItems(true), 230, 164);
+            ComboBox mapSelect = versusMode ? AddCombo(panel, "地图", CreateSystemMapItems(true), 230, 164) : null;
 
             GameMapConfig[] systemMaps = CreateSystemMaps();
             GameMapConfig customMap = BattleMapFactory.CreateEmpty("自定义地图");
@@ -649,7 +724,7 @@ namespace Peace_of_Tanks
                 Size = new Size(420, 420),
                 Location = new Point(735, 160),
                 BackColor = Color.FromArgb(14, 24, 36),
-                Map = CreatePreviewMap(systemMaps[0], selectedNetworkRule == BattleRuleMode.Survival),
+                Map = CreatePreviewMap(versusMode ? systemMaps[0] : BattleMapFactory.CreateStageMap(selectedNetworkStage), selectedNetworkRule == BattleRuleMode.Survival),
                 Editable = false,
                 SelectedTile = MapTileType.Wall
             };
@@ -669,16 +744,18 @@ namespace Peace_of_Tanks
                 materialButton.Click += (s, e) => mapPreview.SelectedTile = tile;
                 materialPanel.Controls.Add(materialButton);
             }
-            pageControls.Add(materialPanel);
-
-            mapSelect.SelectedIndexChanged += (s, e) =>
+            if (versusMode)
             {
-                bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
-                int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
-                mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], selectedNetworkRule == BattleRuleMode.Survival);
-                mapPreview.Editable = custom;
-                mapPreview.Invalidate();
-            };
+                pageControls.Add(materialPanel);
+                mapSelect.SelectedIndexChanged += (s, e) =>
+                {
+                    bool custom = mapSelect.SelectedIndex >= systemMaps.Length;
+                    int selectedIndex = Math.Max(0, Math.Min(systemMaps.Length - 1, mapSelect.SelectedIndex));
+                    mapPreview.Map = CreatePreviewMap(custom ? customMap : systemMaps[selectedIndex], false);
+                    mapPreview.Editable = custom;
+                    mapPreview.Invalidate();
+                };
+            }
 
             Button create = CreateSmallButton("创建并等待", new Point(24, 334), true);
             create.Size = new Size(128, 34);
@@ -700,7 +777,8 @@ namespace Peace_of_Tanks
                     name.Text.Trim(),
                     2,
                     selectedNetworkRule,
-                    mapPreview.Map);
+                    versusMode ? mapPreview.Map : BattleMapFactory.CreateStageMap(selectedNetworkStage),
+                    versusMode ? 1 : selectedNetworkStage);
             };
             panel.Controls.Add(create);
 
@@ -724,6 +802,27 @@ namespace Peace_of_Tanks
             return BattleMapFactory.CloneMap(map);
         }
 
+        private static string GetStageDescription(int stage)
+        {
+            switch (stage)
+            {
+                case 1: return "废墟前线：适合起步熟悉走位与清怪。";
+                case 2: return "钢铁水坝：障碍更多，侧翼压力更强。";
+                case 3: return "要塞核心：核心战场，Boss压制最强。";
+                case 4: return "林地迷洲：草丛密集，视野与伏击压力更高。";
+                case 5: return "烈火峡口：通道狭窄，钢铁防线切割战场。";
+                case 6: return "终极地堡：环形堡垒压迫，最终挑战强度最高。";
+                default: return BattleMapFactory.GetStageMapName(stage);
+            }
+        }
+
+        private static NetworkDifficulty GetDifficultyForStage(int stage)
+        {
+            if (stage >= 5) return NetworkDifficulty.Hard;
+            if (stage >= 3) return NetworkDifficulty.Medium;
+            return NetworkDifficulty.Easy;
+        }
+
         private void ShowSinglePlayerSetupPage()
         {
             ClearPage();
@@ -732,7 +831,7 @@ namespace Peace_of_Tanks
             pageControls.Add(new HudHeader
             {
                 Title = "单人挑战",
-                Subtitle = "三个关卡逐步解锁，通关前一关后开启下一关",
+                Subtitle = "六个关卡逐步解锁，通关前一关后开启下一关",
                 Size = new Size(650, 74),
                 Location = new Point(330, 82)
             });
@@ -753,7 +852,7 @@ namespace Peace_of_Tanks
             pageControls.Add(previewTitle);
             pageControls.Add(mapPreview);
 
-            HudPanel panel = new HudPanel { Size = new Size(520, 360), Location = new Point(305, 180), BackColor = Color.FromArgb(14, 24, 36) };
+            HudPanel panel = new HudPanel { Size = new Size(520, 520), Location = new Point(305, 150), BackColor = Color.FromArgb(14, 24, 36) };
             Control leaderboardPanel = CreateSingleLeaderboardPanel();
             leaderboardPanel.Location = new Point(40, 180);
             Label title = CreatePanelLabel("选择关卡", new Point(24, 28), 14, Color.White, FontStyle.Bold);
@@ -767,22 +866,22 @@ namespace Peace_of_Tanks
                 mapPreview.Invalidate();
             };
 
-            for (int stage = 1; stage <= 3; stage++)
+            for (int stage = 1; stage <= BattleMapFactory.StageMapCount; stage++)
             {
                 bool unlocked = playerData.IsStageUnlocked(stage);
-                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关") : ("第" + stage + "关 未解锁"), new Point(24, 72 + (stage - 1) * 64), unlocked);
+                Button stageButton = CreateSmallButton(unlocked ? ("第" + stage + "关") : ("第" + stage + "关 未解锁"), new Point(24, 68 + (stage - 1) * 56), unlocked);
                 stageButton.Size = new Size(180, 42);
                 int capturedStage = stage;
                 stageButton.Click += (s, e) => refreshStageInfo(capturedStage);
                 panel.Controls.Add(stageButton);
 
-                string desc = capturedStage == 1 ? "废墟前线：适合起步熟悉走位与清怪。" : capturedStage == 2 ? "钢铁水坝：障碍更多，侧翼压力更强。" : "要塞核心：核心战场，Boss压制最强。";
-                panel.Controls.Add(CreatePanelLabel(desc, new Point(220, 78 + (capturedStage - 1) * 64), new Size(260, 42), 9, unlocked ? Color.FromArgb(200, 215, 230) : Color.FromArgb(120, 130, 145), FontStyle.Regular));
+                string desc = GetStageDescription(capturedStage);
+                panel.Controls.Add(CreatePanelLabel(desc, new Point(220, 74 + (capturedStage - 1) * 56), new Size(260, 42), 9, unlocked ? Color.FromArgb(200, 215, 230) : Color.FromArgb(120, 130, 145), FontStyle.Regular));
             }
 
-            panel.Controls.Add(CreatePanelLabel("规则：通关当前关卡后解锁下一关，也可反复挑战已通关关卡。", new Point(24, 276), new Size(460, 36), 9, Color.FromArgb(190, 205, 225), FontStyle.Regular));
+            panel.Controls.Add(CreatePanelLabel("规则：通关当前关卡后解锁下一关，也可反复挑战已通关关卡。", new Point(24, 410), new Size(460, 36), 9, Color.FromArgb(190, 205, 225), FontStyle.Regular));
 
-            Button start = CreateSmallButton("开始挑战", new Point(24, 310), true);
+            Button start = CreateSmallButton("开始挑战", new Point(24, 458), true);
             start.Size = new Size(160, 40);
             start.Click += (s, e) =>
             {
@@ -792,7 +891,7 @@ namespace Peace_of_Tanks
                     return;
                 }
 
-                StartSinglePlayer(selectedMap, (NetworkDifficulty)Math.Max(0, selectedStage - 1), selectedStage);
+                StartSinglePlayer(selectedMap, GetDifficultyForStage(selectedStage), selectedStage);
             };
             panel.Controls.Add(start);
 
@@ -823,6 +922,12 @@ namespace Peace_of_Tanks
                 pageControls.Add(CreateTankCard(type, new Point(x + (index % 3) * 280, y + (index / 3) * 255)));
                 index++;
             }
+
+            pageControls.Add(new ComingSoonTankCard
+            {
+                Size = new Size(250, 230),
+                Location = new Point(x + (index % 3) * 280, y + (index / 3) * 255)
+            });
 
             pageControls.Add(CreateBackButton());
             AddPageControls();
@@ -893,6 +998,26 @@ namespace Peace_of_Tanks
             };
 
             return card;
+        }
+
+        private Control CreateSelectedTankInfoPanel()
+        {
+            TankType tankType = playerData.SelectedTank;
+            PlayerTankData tankData = playerData.Tanks[tankType];
+            TankConfig config = TankConfigs.GetConfig(tankType);
+            var images = TankResourceLoader.GetPlayerTankImages(tankType);
+
+            return new SelectedTankInfoPanel
+            {
+                Location = new Point(470, 188),
+                Size = new Size(560, 260),
+                TankType = tankType,
+                TankName = GetTankName(tankType),
+                TankColor = GetTankColor(tankType),
+                TankImage = images.Item1,
+                TankData = tankData,
+                TankConfig = config
+            };
         }
 
         private Button CreateSmallButton(string text, Point location, bool enabled)
@@ -974,7 +1099,8 @@ namespace Peace_of_Tanks
                 BackColor = Color.FromArgb(14, 24, 36),
                 AutoSize = false,
                 Size = labelSize,
-                Location = location
+                Location = location,
+                TextAlign = ContentAlignment.TopLeft
             };
         }
 
@@ -987,8 +1113,8 @@ namespace Peace_of_Tanks
         {
             HudMainButton button = new HudMainButton
             {
-                Title = "返回大厅",
-                Subtitle = "回到主界面",
+                Title = "返回",
+                Subtitle = "回到上一页",
                 Icon = Peace_of_Tanks.Properties.Resources.lobby_icon_match,
                 Primary = false,
                 Size = new Size(210, 72),
@@ -1037,10 +1163,19 @@ namespace Peace_of_Tanks
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty)
         {
-            StartNetworkMatch(joinMode, roomId, difficulty, lobbyServerHost, lobbyServerPort, chatPlayerName, 2, selectedNetworkRule, BattleMapFactory.CreateSystemMap(0));
+            GameMapConfig map = selectedNetworkRule == BattleRuleMode.Survival
+                ? BattleMapFactory.CreateStageMap(selectedNetworkStage)
+                : BattleMapFactory.CreateSystemMap(0);
+            int stageId = selectedNetworkRule == BattleRuleMode.Survival ? selectedNetworkStage : 1;
+            StartNetworkMatch(joinMode, roomId, difficulty, lobbyServerHost, lobbyServerPort, chatPlayerName, 2, selectedNetworkRule, map, stageId);
         }
 
         private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty, string host, int port, string playerName, int playerCount, BattleRuleMode battleRule, GameMapConfig mapConfig)
+        {
+            StartNetworkMatch(joinMode, roomId, difficulty, host, port, playerName, playerCount, battleRule, mapConfig, battleRule == BattleRuleMode.Survival ? selectedNetworkStage : 1);
+        }
+
+        private void StartNetworkMatch(NetworkJoinMode joinMode, string roomId, NetworkDifficulty difficulty, string host, int port, string playerName, int playerCount, BattleRuleMode battleRule, GameMapConfig mapConfig, int stageId)
         {
             if (!EnsureServerReady(host, port))
             {
@@ -1056,6 +1191,7 @@ namespace Peace_of_Tanks
                 UseNetwork = true,
                 Difficulty = difficulty,
                 PlayerCount = playerCount,
+                StageId = stageId,
                 BattleRule = battleRule,
                 MapConfig = mapConfig,
                 NetworkConfig = new NetworkConfig
@@ -1203,9 +1339,26 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            bool followTail = IsChatNearBottom();
             chatLog.AppendText("[" + sender + "] " + message + Environment.NewLine);
-            chatLog.SelectionStart = chatLog.TextLength;
-            chatLog.ScrollToCaret();
+            if (followTail)
+            {
+                chatLog.SelectionStart = chatLog.TextLength;
+                chatLog.ScrollToCaret();
+            }
+            UpdateChatScrollIndicator();
+        }
+
+        private bool IsChatNearBottom()
+        {
+            if (chatLog == null)
+            {
+                return true;
+            }
+
+            int totalLines = Math.Max(1, chatLog.GetLineFromCharIndex(chatLog.TextLength) + 1);
+            int lastLine = chatLog.GetLineFromCharIndex(chatLog.GetCharIndexFromPosition(new Point(1, Math.Max(1, chatLog.Height - 2))));
+            return lastLine >= totalLines - 2;
         }
 
         private void SetChatStatus(string status)
@@ -1314,6 +1467,116 @@ namespace Peace_of_Tanks
             }
         }
 
+        private sealed class HudScrollIndicator : Control
+        {
+            private int firstVisibleLine;
+            private int visibleLineCount = 1;
+            private int totalLineCount = 1;
+            private bool dragging;
+            private int dragOffsetY;
+
+            public event Action<int> ScrollRequested;
+
+            public HudScrollIndicator()
+            {
+                DoubleBuffered = true;
+                Cursor = Cursors.Hand;
+            }
+
+            public void SetScrollState(int firstVisible, int visibleCount, int totalCount)
+            {
+                firstVisibleLine = Math.Max(0, firstVisible);
+                visibleLineCount = Math.Max(1, visibleCount);
+                totalLineCount = Math.Max(1, totalCount);
+                Invalidate();
+            }
+
+            protected override void OnMouseDown(MouseEventArgs e)
+            {
+                if (totalLineCount <= visibleLineCount)
+                {
+                    return;
+                }
+
+                Rectangle thumb = GetThumbBounds();
+                dragging = true;
+                dragOffsetY = thumb.Contains(e.Location) ? e.Y - thumb.Top : thumb.Height / 2;
+                RequestScrollFromMouse(e.Y);
+                Capture = true;
+                base.OnMouseDown(e);
+            }
+
+            protected override void OnMouseMove(MouseEventArgs e)
+            {
+                if (dragging)
+                {
+                    RequestScrollFromMouse(e.Y);
+                }
+
+                base.OnMouseMove(e);
+            }
+
+            protected override void OnMouseUp(MouseEventArgs e)
+            {
+                dragging = false;
+                Capture = false;
+                base.OnMouseUp(e);
+            }
+
+            private void RequestScrollFromMouse(int mouseY)
+            {
+                Rectangle thumb = GetThumbBounds();
+                int maxFirstLine = Math.Max(1, totalLineCount - visibleLineCount);
+                int movableHeight = Math.Max(1, Height - thumb.Height);
+                int desiredTop = Math.Max(0, Math.Min(movableHeight, mouseY - dragOffsetY));
+                int targetLine = desiredTop * maxFirstLine / movableHeight;
+
+                Action<int> handler = ScrollRequested;
+                if (handler != null)
+                {
+                    handler(targetLine);
+                }
+            }
+
+            private Rectangle GetThumbBounds()
+            {
+                if (totalLineCount <= visibleLineCount)
+                {
+                    return new Rectangle(0, 0, Width, Height);
+                }
+
+                int thumbHeight = Math.Max(12, Height * visibleLineCount / totalLineCount);
+                int maxFirstLine = Math.Max(1, totalLineCount - visibleLineCount);
+                int thumbTop = (Height - thumbHeight) * Math.Min(firstVisibleLine, maxFirstLine) / maxFirstLine;
+                return new Rectangle(0, thumbTop, Width, thumbHeight);
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle track = new Rectangle(1, 0, Math.Max(1, Width - 2), Height);
+
+                using (SolidBrush trackBrush = new SolidBrush(Color.FromArgb(115, 23, 35, 50)))
+                {
+                    e.Graphics.FillRectangle(trackBrush, track);
+                }
+
+                if (totalLineCount <= visibleLineCount)
+                {
+                    return;
+                }
+
+                Rectangle thumb = GetThumbBounds();
+
+                using (SolidBrush thumbBrush = new SolidBrush(Color.FromArgb(210, 173, 135, 67)))
+                using (Pen edgePen = new Pen(Color.FromArgb(150, 255, 225, 150), 1))
+                {
+                    e.Graphics.FillRectangle(thumbBrush, thumb);
+                    e.Graphics.DrawRectangle(edgePen, new Rectangle(thumb.X, thumb.Y, thumb.Width - 1, thumb.Height - 1));
+                }
+            }
+        }
+
         private sealed class HudHeader : Control
         {
             public string Title { get; set; }
@@ -1336,13 +1599,20 @@ namespace Peace_of_Tanks
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 DrawPanelFrame(e.Graphics, ClientRectangle, false);
-                using (Font titleFont = new Font("Microsoft YaHei UI", 26, FontStyle.Bold))
-                using (Font subFont = new Font("Microsoft YaHei UI", 14, FontStyle.Bold))
+                using (Font titleFont = new Font("Microsoft YaHei UI", 23, FontStyle.Bold))
+                using (Font subFont = new Font("Microsoft YaHei UI", 11.5f, FontStyle.Bold))
                 using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
                 using (SolidBrush subBrush = new SolidBrush(Color.FromArgb(235, 236, 244, 255)))
+                using (StringFormat subFormat = new StringFormat())
                 {
-                    e.Graphics.DrawString(Title ?? string.Empty, titleFont, titleBrush, 18, 6);
-                    e.Graphics.DrawString(Subtitle ?? string.Empty, subFont, subBrush, 20, 48);
+                    subFormat.Alignment = StringAlignment.Near;
+                    subFormat.LineAlignment = StringAlignment.Near;
+                    subFormat.Trimming = StringTrimming.EllipsisWord;
+
+                    RectangleF titleBounds = new RectangleF(18, 4, Math.Max(1, Width - 36), 38);
+                    RectangleF subBounds = new RectangleF(20, 43, Math.Max(1, Width - 40), Math.Max(24, Height - 50));
+                    e.Graphics.DrawString(Title ?? string.Empty, titleFont, titleBrush, titleBounds);
+                    e.Graphics.DrawString(Subtitle ?? string.Empty, subFont, subBrush, subBounds, subFormat);
                 }
             }
         }
@@ -1466,13 +1736,12 @@ namespace Peace_of_Tanks
 
         private sealed class TankCardControl : Control
         {
-            private readonly Rectangle selectRect = new Rectangle(18, 190, 94, 28);
-            private readonly Rectangle speedUpgradeRect = new Rectangle(126, 126, 52, 24);
-            private readonly Rectangle attackUpgradeRect = new Rectangle(184, 126, 52, 24);
-            private readonly Rectangle healthUpgradeRect = new Rectangle(126, 154, 52, 24);
-            private readonly Rectangle bulletSpeedUpgradeRect = new Rectangle(184, 154, 52, 24);
-            private readonly Rectangle cooldownUpgradeRect = new Rectangle(126, 182, 110, 24);
-            private bool hoverSelect;
+            private readonly Rectangle speedUpgradeRect = new Rectangle(126, 138, 52, 24);
+            private readonly Rectangle attackUpgradeRect = new Rectangle(184, 138, 52, 24);
+            private readonly Rectangle healthUpgradeRect = new Rectangle(126, 166, 52, 24);
+            private readonly Rectangle bulletSpeedUpgradeRect = new Rectangle(184, 166, 52, 24);
+            private readonly Rectangle cooldownUpgradeRect = new Rectangle(126, 194, 110, 24);
+            private bool hoverCard;
             private TankUpgradeType? hoverUpgrade;
 
             public TankType TankType { get; set; }
@@ -1497,27 +1766,28 @@ namespace Peace_of_Tanks
             protected override void OnMouseMove(MouseEventArgs e)
             {
                 bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
-                bool newHoverSelect = selectEnabled && selectRect.Contains(e.Location);
-                TankUpgradeType? newHoverUpgrade = GetUpgradeTypeAt(e.Location);
-                if (newHoverUpgrade.HasValue && !CanUpgrade(newHoverUpgrade.Value))
+                TankUpgradeType? upgradeArea = GetUpgradeTypeAt(e.Location);
+                TankUpgradeType? newHoverUpgrade = upgradeArea;
+                if (upgradeArea.HasValue && !CanUpgrade(upgradeArea.Value))
                 {
                     newHoverUpgrade = null;
                 }
 
-                if (newHoverSelect != hoverSelect || newHoverUpgrade != hoverUpgrade)
+                bool newHoverCard = selectEnabled && !upgradeArea.HasValue;
+                if (newHoverCard != hoverCard || newHoverUpgrade != hoverUpgrade)
                 {
-                    hoverSelect = newHoverSelect;
+                    hoverCard = newHoverCard;
                     hoverUpgrade = newHoverUpgrade;
                     Invalidate();
                 }
 
-                Cursor = hoverSelect || hoverUpgrade.HasValue ? Cursors.Hand : Cursors.Default;
+                Cursor = hoverCard || hoverUpgrade.HasValue ? Cursors.Hand : Cursors.Default;
                 base.OnMouseMove(e);
             }
 
             protected override void OnMouseLeave(EventArgs e)
             {
-                hoverSelect = false;
+                hoverCard = false;
                 hoverUpgrade = null;
                 Cursor = Cursors.Default;
                 Invalidate();
@@ -1529,20 +1799,23 @@ namespace Peace_of_Tanks
                 bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
                 TankUpgradeType? upgradeType = GetUpgradeTypeAt(e.Location);
 
-                if (selectEnabled && selectRect.Contains(e.Location))
+                if (upgradeType.HasValue)
+                {
+                    if (CanUpgrade(upgradeType.Value))
+                    {
+                        Action<TankType, TankUpgradeType> handler = UpgradeClicked;
+                        if (handler != null)
+                        {
+                            handler(TankType, upgradeType.Value);
+                        }
+                    }
+                }
+                else if (selectEnabled)
                 {
                     Action<TankType> handler = SelectOrUnlockClicked;
                     if (handler != null)
                     {
                         handler(TankType);
-                    }
-                }
-                else if (upgradeType.HasValue && CanUpgrade(upgradeType.Value))
-                {
-                    Action<TankType, TankUpgradeType> handler = UpgradeClicked;
-                    if (handler != null)
-                    {
-                        handler(TankType, upgradeType.Value);
                     }
                 }
 
@@ -1552,7 +1825,7 @@ namespace Peace_of_Tanks
             protected override void OnPaint(PaintEventArgs e)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                DrawPanelFrame(e.Graphics, ClientRectangle, IsSelected);
+                DrawPanelFrame(e.Graphics, ClientRectangle, IsSelected || hoverCard);
 
                 if (TankImage != null)
                 {
@@ -1575,11 +1848,11 @@ namespace Peace_of_Tanks
                         TankSkillType skillType = TankSkillCatalog.GetSkillType(TankType);
                         string skillName = TankSkillCatalog.GetDisplayName(skillType);
                         stats = TankData.IsUnlocked
-                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\n技能 " + skillName + "  CD " + TankSkillCatalog.GetCooldownSeconds(skillType).ToString("0") + "s"
+                            ? "速 " + TankData.SpeedLevel + "/5  弹 " + TankData.BulletSpeedLevel + "/5\n攻 " + attack + "  Lv" + TankData.AttackLevel + "/5\n命 " + health + "  Lv" + TankData.HealthLevel + "/5\n技能 " + skillName + "\nCD " + cooldown.ToString("0") + "s"
                             : "未解锁\n攻击 " + attack + "\n生命 " + health + "\n技能 " + skillName + "\n解锁 " + TankConfig.UnlockCoin + " 金币";
                     }
 
-                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 50, 124, 76));
+                    e.Graphics.DrawString(stats, statsFont, statsBrush, new RectangleF(112, 50, 128, 90));
                 }
 
                 if (IsSelected)
@@ -1591,13 +1864,10 @@ namespace Peace_of_Tanks
                     }
                 }
 
-                bool selectEnabled = TankData != null && (TankData.IsUnlocked || CanUnlock);
-                string selectText = TankData != null && TankData.IsUnlocked ? "选择" : CanUnlock ? "解锁" : "锁定";
-                DrawActionButton(e.Graphics, selectRect, selectText, selectEnabled, hoverSelect);
-                DrawActionButton(e.Graphics, speedUpgradeRect, "速+" + GetUpgradeCostText(TankUpgradeType.Speed), CanUpgrade(TankUpgradeType.Speed), hoverUpgrade == TankUpgradeType.Speed);
-                DrawActionButton(e.Graphics, attackUpgradeRect, "攻+" + GetUpgradeCostText(TankUpgradeType.Attack), CanUpgrade(TankUpgradeType.Attack), hoverUpgrade == TankUpgradeType.Attack);
-                DrawActionButton(e.Graphics, healthUpgradeRect, "命+" + GetUpgradeCostText(TankUpgradeType.Health), CanUpgrade(TankUpgradeType.Health), hoverUpgrade == TankUpgradeType.Health);
-                DrawActionButton(e.Graphics, bulletSpeedUpgradeRect, "弹+" + GetUpgradeCostText(TankUpgradeType.BulletSpeed), CanUpgrade(TankUpgradeType.BulletSpeed), hoverUpgrade == TankUpgradeType.BulletSpeed);
+                DrawActionButton(e.Graphics, speedUpgradeRect, "速度+" + GetUpgradeCostText(TankUpgradeType.Speed), CanUpgrade(TankUpgradeType.Speed), hoverUpgrade == TankUpgradeType.Speed);
+                DrawActionButton(e.Graphics, attackUpgradeRect, "攻击+" + GetUpgradeCostText(TankUpgradeType.Attack), CanUpgrade(TankUpgradeType.Attack), hoverUpgrade == TankUpgradeType.Attack);
+                DrawActionButton(e.Graphics, healthUpgradeRect, "生命+" + GetUpgradeCostText(TankUpgradeType.Health), CanUpgrade(TankUpgradeType.Health), hoverUpgrade == TankUpgradeType.Health);
+                DrawActionButton(e.Graphics, bulletSpeedUpgradeRect, "弹速+" + GetUpgradeCostText(TankUpgradeType.BulletSpeed), CanUpgrade(TankUpgradeType.BulletSpeed), hoverUpgrade == TankUpgradeType.BulletSpeed);
                 DrawActionButton(e.Graphics, cooldownUpgradeRect, "CD+" + GetUpgradeCostText(TankUpgradeType.Cooldown), CanUpgrade(TankUpgradeType.Cooldown), hoverUpgrade == TankUpgradeType.Cooldown);
             }
 
@@ -1644,6 +1914,113 @@ namespace Peace_of_Tanks
                     g.DrawRectangle(borderPen, bounds);
                     g.DrawString(text, font, textBrush, bounds, format);
                 }
+            }
+        }
+
+        private sealed class ComingSoonTankCard : Control
+        {
+            public ComingSoonTankCard()
+            {
+                DoubleBuffered = true;
+                Cursor = Cursors.Default;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                DrawPanelFrame(e.Graphics, ClientRectangle, false);
+
+                using (Font titleFont = new Font("Microsoft YaHei UI", 15, FontStyle.Bold))
+                using (Font subFont = new Font("Microsoft YaHei UI", 10, FontStyle.Bold))
+                using (Font smallFont = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Regular))
+                using (SolidBrush titleBrush = new SolidBrush(Color.FromArgb(190, 205, 225)))
+                using (SolidBrush mutedBrush = new SolidBrush(Color.FromArgb(140, 154, 172)))
+                using (SolidBrush goldBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
+                using (Pen blueprintPen = new Pen(Color.FromArgb(150, 255, 231, 145), 2f))
+                using (Pen faintPen = new Pen(Color.FromArgb(80, 190, 205, 225), 1f))
+                using (StringFormat center = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                {
+                    blueprintPen.DashStyle = DashStyle.Dash;
+                    Rectangle tank = new Rectangle(64, 50, 122, 70);
+                    e.Graphics.DrawRectangle(blueprintPen, tank);
+                    e.Graphics.DrawEllipse(blueprintPen, 92, 58, 48, 48);
+                    e.Graphics.DrawLine(blueprintPen, 116, 58, 116, 24);
+                    e.Graphics.DrawRectangle(faintPen, 46, 34, 158, 102);
+
+                    e.Graphics.DrawString("待推出坦克", titleFont, titleBrush, new RectangleF(20, 142, Width - 40, 28), center);
+                    e.Graphics.DrawString("研发中", subFont, goldBrush, new RectangleF(20, 170, Width - 40, 24), center);
+                    e.Graphics.DrawString("新的定位与技能正在调试", smallFont, mutedBrush, new RectangleF(18, 198, Width - 36, 22), center);
+                }
+            }
+        }
+
+        private sealed class SelectedTankInfoPanel : Control
+        {
+            public TankType TankType { get; set; }
+            public string TankName { get; set; }
+            public Color TankColor { get; set; }
+            public Image TankImage { get; set; }
+            public PlayerTankData TankData { get; set; }
+            public TankConfig TankConfig { get; set; }
+
+            public SelectedTankInfoPanel()
+            {
+                DoubleBuffered = true;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                DrawPanelFrame(e.Graphics, ClientRectangle, false);
+
+                using (Font eyebrowFont = new Font("Microsoft YaHei UI", 10, FontStyle.Bold))
+                using (Font titleFont = new Font("Microsoft YaHei UI", 21, FontStyle.Bold))
+                using (Font labelFont = new Font("Microsoft YaHei UI", 9.5f, FontStyle.Bold))
+                using (Font valueFont = new Font("Microsoft YaHei UI", 11.5f, FontStyle.Bold))
+                using (Font skillFont = new Font("Microsoft YaHei UI", 10.5f, FontStyle.Regular))
+                using (SolidBrush mutedBrush = new SolidBrush(Color.FromArgb(190, 205, 225)))
+                using (SolidBrush titleBrush = new SolidBrush(TankColor))
+                using (SolidBrush whiteBrush = new SolidBrush(Color.White))
+                using (SolidBrush goldBrush = new SolidBrush(Color.FromArgb(255, 231, 145)))
+                {
+                    e.Graphics.DrawString("当前出战坦克", eyebrowFont, goldBrush, 22, 18);
+                    e.Graphics.DrawString(TankName ?? string.Empty, titleFont, titleBrush, 22, 42);
+
+                    if (TankImage != null)
+                    {
+                        e.Graphics.DrawImage(TankImage, 34, 95, 142, 112);
+                    }
+
+                    if (TankData == null || TankConfig == null)
+                    {
+                        return;
+                    }
+
+                    int attack = TankConfig.GetAttackAtLevel(TankData.AttackLevel);
+                    int health = TankConfig.GetHealthAtLevel(TankData.HealthLevel);
+                    double speed = TankConfig.GetSpeedMultiplierAtLevel(TankData.SpeedLevel);
+                    double bulletSpeed = TankConfig.GetBulletSpeedMultiplierAtLevel(TankData.BulletSpeedLevel);
+                    double cooldown = TankConfig.GetCooldownSecondsAtLevel(TankData.CooldownLevel);
+                    TankSkillType skillType = TankSkillCatalog.GetSkillType(TankType);
+                    string skillName = TankSkillCatalog.GetDisplayName(skillType);
+                    string skillDescription = TankSkillCatalog.GetDescription(skillType);
+
+                    DrawInfoRow(e.Graphics, labelFont, valueFont, mutedBrush, whiteBrush, "攻击", attack + "  Lv" + TankData.AttackLevel + "/5", 220, 52);
+                    DrawInfoRow(e.Graphics, labelFont, valueFont, mutedBrush, whiteBrush, "生命", health + "  Lv" + TankData.HealthLevel + "/5", 380, 52);
+                    DrawInfoRow(e.Graphics, labelFont, valueFont, mutedBrush, whiteBrush, "移速", speed.ToString("0.00") + "x  Lv" + TankData.SpeedLevel + "/5", 220, 106);
+                    DrawInfoRow(e.Graphics, labelFont, valueFont, mutedBrush, whiteBrush, "弹速", bulletSpeed.ToString("0.00") + "x  Lv" + TankData.BulletSpeedLevel + "/5", 380, 106);
+                    DrawInfoRow(e.Graphics, labelFont, valueFont, mutedBrush, whiteBrush, "开火冷却", cooldown.ToString("0.0") + "s  Lv" + TankData.CooldownLevel + "/5", 220, 160);
+
+                    e.Graphics.DrawString("技能", labelFont, mutedBrush, 380, 160);
+                    e.Graphics.DrawString(skillName, valueFont, goldBrush, 380, 180);
+                    e.Graphics.DrawString(skillDescription, skillFont, mutedBrush, new RectangleF(220, 220, Width - 244, 28));
+                }
+            }
+
+            private static void DrawInfoRow(Graphics g, Font labelFont, Font valueFont, Brush labelBrush, Brush valueBrush, string label, string value, int x, int y)
+            {
+                g.DrawString(label, labelFont, labelBrush, x, y);
+                g.DrawString(value, valueFont, valueBrush, x, y + 20);
             }
         }
 

@@ -9,13 +9,31 @@ namespace Peace_of_Tanks
 {
     class Collisions
     {
+        public const int BattlefieldWidth = 1000;
+        public const int BattlefieldHeight = 740;
+
+        private static Rectangle GetBattlefieldBounds(Form mainWindow)
+        {
+            if (mainWindow == null)
+            {
+                return new Rectangle(0, 0, BattlefieldWidth, BattlefieldHeight);
+            }
+
+            return new Rectangle(
+                mainWindow.ClientRectangle.Left,
+                mainWindow.ClientRectangle.Top,
+                Math.Min(mainWindow.ClientRectangle.Width, BattlefieldWidth),
+                Math.Min(mainWindow.ClientRectangle.Height, BattlefieldHeight));
+        }
+
         public static bool check_touch(Form mainWindow, Bullet bullet)
         {
             int s_bullet = 10;
-            return (bullet.x <= mainWindow.ClientRectangle.Left)
-                || (bullet.y <= mainWindow.ClientRectangle.Top)
-                || (bullet.x + s_bullet >= mainWindow.ClientRectangle.Right)
-                || (bullet.y + s_bullet >= mainWindow.ClientRectangle.Bottom);
+            Rectangle bounds = GetBattlefieldBounds(mainWindow);
+            return (bullet.x <= bounds.Left)
+                || (bullet.y <= bounds.Top)
+                || (bullet.x + s_bullet >= bounds.Right)
+                || (bullet.y + s_bullet >= bounds.Bottom);
         }
 
         public static int check_touch(Form mainWindow, Bullet bullet, Box box)
@@ -46,12 +64,13 @@ namespace Peace_of_Tanks
         public static bool check_touch(int x, int y, Box box, Form MainWindow)
         {
             int s_box = 25, s_tank = 50;
+            Rectangle bounds = GetBattlefieldBounds(MainWindow);
             if ( ((x < box.x && x + s_tank > box.x)||(x >= box.x && box.x + s_box > x)) && 
                 ((y < box.y && y + s_tank > box.y)||( y >= box.y && box.y + s_box > y)) && 
                 !(box is Box_Green)
                 
-                || (x < MainWindow.ClientRectangle.Left) || (y < MainWindow.ClientRectangle.Top) || (x + s_tank > MainWindow.ClientRectangle.Right) || 
-                (y + s_tank > MainWindow.ClientRectangle.Bottom))
+                || (x < bounds.Left) || (y < bounds.Top) || (x + s_tank > bounds.Right) || 
+                (y + s_tank > bounds.Bottom))
                 {
                     return true;
                 }

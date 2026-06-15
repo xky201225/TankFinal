@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Peace_of_Tanks
@@ -9,16 +11,22 @@ namespace Peace_of_Tanks
     {
         private Label networkHintLabel;
         private Label networkStatusLabel;
+        private Panel networkChatPanel;
+        private RichTextBox networkChatLog;
+        private TextBox networkChatInput;
+        private Label networkVoiceLabel;
         private TcpGameClient networkClient;
         private NetworkConfig activeNetworkConfig;
         private readonly NetworkInputState remoteInputState = new NetworkInputState();
         private readonly NetworkInputState guestInputState = new NetworkInputState();
+        private NetworkVoiceChat networkVoiceChat;
         private readonly object snapshotLock = new object();
         private GameSnapshot latestSnapshot;
         private bool networkMode;
         private bool networkHost;
         private bool networkWaiting;
         private bool networkSessionStarted;
+        private bool networkVoiceHeld;
         private bool suppressDisconnectMessage;
         private TankType networkPlayer1TankType = TankType.Green;
         private TankType networkPlayer2TankType = TankType.Green;
@@ -60,8 +68,77 @@ namespace Peace_of_Tanks
 
             Controls.Add(networkHintLabel);
             Controls.Add(networkStatusLabel);
+            CreateNetworkChatUi();
             networkHintLabel.BringToFront();
             networkStatusLabel.BringToFront();
+        }
+
+        private void CreateNetworkChatUi()
+        {
+            networkChatPanel = new Panel
+            {
+                BackColor = Color.FromArgb(185, 12, 20, 32),
+                Location = GetNetworkChatPanelLocation(),
+                Size = new Size(330, 104),
+                Visible = false
+            };
+
+            networkChatLog = new RichTextBox
+            {
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None,
+                BackColor = Color.FromArgb(18, 28, 42),
+                ForeColor = Color.FromArgb(230, 240, 255),
+                Font = new Font("Microsoft YaHei UI", 9, FontStyle.Regular),
+                Location = new Point(8, 8),
+                Size = new Size(314, 52),
+                ScrollBars = RichTextBoxScrollBars.Vertical
+            };
+
+            networkChatInput = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.FromArgb(25, 36, 50),
+                ForeColor = Color.White,
+                Font = new Font("Microsoft YaHei UI", 9, FontStyle.Regular),
+                Location = new Point(8, 68),
+                Size = new Size(190, 23)
+            };
+            networkChatInput.KeyDown += NetworkChatInput_KeyDown;
+
+            Button sendButton = new Button
+            {
+                Text = "发送",
+                Font = new Font("Microsoft YaHei UI", 9, FontStyle.Bold),
+                ForeColor = Color.White,
+                BackColor = Color.FromArgb(160, 126, 84, 26),
+                FlatStyle = FlatStyle.Flat,
+                Location = new Point(204, 66),
+                Size = new Size(56, 26)
+            };
+            sendButton.FlatAppearance.BorderColor = Color.FromArgb(255, 205, 99);
+            sendButton.Click += (s, e) => SendNetworkChatMessage();
+
+            networkVoiceLabel = new Label
+            {
+                Text = "Tab 语音",
+                Font = new Font("Microsoft YaHei UI", 8, FontStyle.Bold),
+                ForeColor = Color.FromArgb(190, 205, 225),
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Location = new Point(266, 72)
+            };
+
+            networkChatPanel.Controls.Add(networkChatLog);
+            networkChatPanel.Controls.Add(networkChatInput);
+            networkChatPanel.Controls.Add(sendButton);
+            networkChatPanel.Controls.Add(networkVoiceLabel);
+            Controls.Add(networkChatPanel);
+        }
+
+        private Point GetNetworkChatPanelLocation()
+        {
+            return new Point(18, networkStatusLabel != null && networkStatusLabel.Visible ? 70 : 18);
         }
 
         private void UpdateNetworkUiVisibility()
@@ -73,12 +150,76 @@ namespace Peace_of_Tanks
 
             networkHintLabel.Visible = modeMenu == 0 && !networkWaiting && !networkSessionStarted && (launchOptions == null || !launchOptions.StartImmediately);
             networkStatusLabel.Visible = networkWaiting;
+            if (networkChatPanel != null)
+            {
+                networkChatPanel.Visible = networkSessionStarted;
+                networkChatPanel.Location = GetNetworkChatPanelLocation();
+                if (networkChatPanel.Visible)
+                {
+                    networkChatPanel.BringToFront();
+                }
+            }
             networkHintLabel.BringToFront();
             networkStatusLabel.BringToFront();
         }
 
+        private void NetworkChatInput_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                SendNetworkChatMessage();
+            }
+        }
+
+        private void SendNetworkChatMessage()
+        {
+            if (networkClient == null || !networkClient.IsConnected || networkChatInput == null)
+            {
+                return;
+            }
+
+            string message = networkChatInput.Text.Trim();
+            if (message.Length == 0)
+            {
+                return;
+            }
+
+            string sender = activeNetworkConfig != null && !string.IsNullOrWhiteSpace(activeNetworkConfig.PlayerName)
+                ? activeNetworkConfig.PlayerName
+                : "我";
+            AppendNetworkChat(sender, message);
+            networkClient.SendLine("MATCH_CHAT|" + EncodeProtocolPart(sender) + "|" + EncodeProtocolPart(message));
+            networkChatInput.Clear();
+            Focus();
+        }
+
+        private void AppendNetworkChat(string sender, string message)
+        {
+            if (networkChatLog == null)
+            {
+                return;
+            }
+
+            networkChatLog.AppendText("[" + sender + "] " + message + Environment.NewLine);
+            networkChatLog.SelectionStart = networkChatLog.TextLength;
+            networkChatLog.ScrollToCaret();
+        }
+
         private bool TryHandleNetworkGlobalKeyDown(KeyEventArgs e)
         {
+            if (networkWaiting && e.KeyCode == Keys.Escape)
+            {
+                CancelNetworkWaitingToLobby();
+                return true;
+            }
+
+            if (networkSessionStarted && e.KeyCode == Keys.Tab)
+            {
+                StartNetworkVoice();
+                return true;
+            }
+
             if (modeMenu == 0 && e.KeyCode == Keys.N)
             {
                 if (networkClient != null && networkClient.IsConnected)
@@ -100,7 +241,7 @@ namespace Peace_of_Tanks
                 return true;
             }
 
-            if (networkSessionStarted && modeMenu >= 3)
+            if (networkSessionStarted && modeMenu >= 3 && !IsNetworkChatInputFocused())
             {
                 return HandleNetworkGameplayKey(e.KeyCode, true);
             }
@@ -108,14 +249,59 @@ namespace Peace_of_Tanks
             return false;
         }
 
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (networkSessionStarted && (keyData & Keys.KeyCode) == Keys.Tab)
+            {
+                StartNetworkVoice();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            if (networkSessionStarted && (keyData & Keys.KeyCode) == Keys.Tab)
+            {
+                return true;
+            }
+
+            return base.IsInputKey(keyData);
+        }
+
+        private void CancelNetworkWaitingToLobby()
+        {
+            suppressDisconnectMessage = true;
+            CloseNetworkConnection();
+            networkWaiting = false;
+            networkSessionStarted = false;
+            networkHost = false;
+            networkMode = false;
+            latestSnapshot = null;
+            returnToLobby = true;
+            Close();
+        }
+
         private bool TryHandleNetworkGlobalKeyUp(KeyEventArgs e)
         {
-            if (networkSessionStarted && modeMenu >= 3)
+            if (networkSessionStarted && e.KeyCode == Keys.Tab)
+            {
+                StopNetworkVoice();
+                return true;
+            }
+
+            if (networkSessionStarted && modeMenu >= 3 && !IsNetworkChatInputFocused())
             {
                 return HandleNetworkGameplayKey(e.KeyCode, false);
             }
 
             return false;
+        }
+
+        private bool IsNetworkChatInputFocused()
+        {
+            return networkChatInput != null && networkChatInput.Focused;
         }
 
         private void BeginNetworkConnect()
@@ -233,6 +419,42 @@ namespace Peace_of_Tanks
                 networkPlayer1TankType = ParseTankType(parts.Length > 3 ? parts[3] : null, selectedTankType);
                 networkPlayer2TankType = ParseTankType(parts.Length > 4 ? parts[4] : null, TankType.Green);
                 StartNetworkSession(role.Equals("HOST", StringComparison.OrdinalIgnoreCase));
+                return;
+            }
+
+            if (line.StartsWith("MATCH_CHAT|", StringComparison.Ordinal))
+            {
+                string[] parts = line.Split('|');
+                if (parts.Length >= 3)
+                {
+                    AppendNetworkChat(DecodeProtocolPart(parts[1]), DecodeProtocolPart(parts[2]));
+                }
+                return;
+            }
+
+            if (line.StartsWith("VOICE_STATE|", StringComparison.Ordinal))
+            {
+                bool speaking = line.EndsWith("|1", StringComparison.Ordinal);
+                if (networkVoiceLabel != null)
+                {
+                    networkVoiceLabel.Text = speaking ? "对方语音中" : "Tab 语音";
+                    networkVoiceLabel.ForeColor = speaking ? Color.FromArgb(255, 231, 145) : Color.FromArgb(190, 205, 225);
+                }
+                return;
+            }
+
+            if (line.StartsWith("VOICE|", StringComparison.Ordinal))
+            {
+                if (networkVoiceChat == null)
+                {
+                    networkVoiceChat = new NetworkVoiceChat(SendNetworkVoiceChunk);
+                }
+
+                byte[] chunk = DecodeProtocolBytes(line.Substring("VOICE|".Length));
+                if (chunk.Length > 0)
+                {
+                    networkVoiceChat.Play(chunk);
+                }
                 return;
             }
 
@@ -534,6 +756,68 @@ namespace Peace_of_Tanks
             networkClient.SendLine("INPUT|" + payload);
         }
 
+        private void StartNetworkVoice()
+        {
+            if (networkVoiceHeld || networkClient == null || !networkClient.IsConnected)
+            {
+                return;
+            }
+
+            if (networkVoiceChat == null)
+            {
+                networkVoiceChat = new NetworkVoiceChat(SendNetworkVoiceChunk);
+            }
+
+            networkVoiceHeld = true;
+            if (networkVoiceLabel != null)
+            {
+                networkVoiceLabel.Text = "正在说话";
+                networkVoiceLabel.ForeColor = Color.FromArgb(156, 244, 190);
+            }
+
+            networkClient.SendLine("VOICE_STATE|1");
+            if (!networkVoiceChat.StartCapture())
+            {
+                AppendNetworkChat("系统", "无法打开麦克风。");
+                StopNetworkVoice();
+            }
+        }
+
+        private void StopNetworkVoice()
+        {
+            if (!networkVoiceHeld)
+            {
+                return;
+            }
+
+            networkVoiceHeld = false;
+            if (networkVoiceChat != null)
+            {
+                networkVoiceChat.StopCapture();
+            }
+
+            if (networkVoiceLabel != null)
+            {
+                networkVoiceLabel.Text = "Tab 语音";
+                networkVoiceLabel.ForeColor = Color.FromArgb(190, 205, 225);
+            }
+
+            if (networkClient != null && networkClient.IsConnected)
+            {
+                networkClient.SendLine("VOICE_STATE|0");
+            }
+        }
+
+        private void SendNetworkVoiceChunk(byte[] chunk)
+        {
+            if (networkClient == null || !networkClient.IsConnected || chunk == null || chunk.Length == 0)
+            {
+                return;
+            }
+
+            networkClient.SendLine("VOICE|" + Convert.ToBase64String(chunk));
+        }
+
         private void ApplyRemoteInputToSecondPlayer()
         {
             if (!IsNetworkHost)
@@ -753,6 +1037,10 @@ namespace Peace_of_Tanks
 
             DrawSnapshotHud(snapshot);
 
+            Rectangle battlefieldViewport = GetBattlefieldViewport();
+            GraphicsState worldState = grMemory.Save();
+            grMemory.TranslateTransform(battlefieldViewport.X, battlefieldViewport.Y);
+
             for (int i = 0; i < snapshot.Boxes.Count; i++)
             {
                 if (snapshot.Boxes[i].Type != 2)
@@ -804,6 +1092,9 @@ namespace Peace_of_Tanks
                 DrawSnapshotAnimation(snapshot.Animations[i]);
             }
 
+            DrawSnapshotDamageTexts(snapshot);
+            grMemory.Restore(worldState);
+
             if (snapshot.GameOver)
             {
                 ShowSettlementPage(snapshot.Results);
@@ -848,15 +1139,20 @@ namespace Peace_of_Tanks
                 }
             }
 
-            DrawNumber(snapshot.PointsPlayer1, 255, 760);
-            DrawNumber(snapshot.PointsPlayer2, 633, 760);
+            int hudNumberX = ClientSize.Width - 360;
+            int hudNumberY = ClientSize.Height - 36;
+            DrawNumber(snapshot.PointsPlayer1, hudNumberX, hudNumberY);
+            DrawNumber(snapshot.PointsPlayer2, hudNumberX, ClientSize.Height - 72);
             DrawKillHud(snapshot.KillsPlayer1, snapshot.KillsPlayer2);
             DrawSurvivalHud(snapshot.SurvivalWave, snapshot.WaveEnemiesLeft, snapshot.SurvivalBossWave, snapshot.SurvivalVictory);
             if (snapshot.BattleBannerTicks > 0 && !string.IsNullOrEmpty(snapshot.BattleBannerText))
             {
                 DrawBattleBanner(snapshot.BattleBannerText);
             }
+        }
 
+        private void DrawSnapshotDamageTexts(GameSnapshot snapshot)
+        {
             for (int i = 0; i < snapshot.DamageTexts.Count; i++)
             {
                 Brush brush = snapshot.DamageTexts[i].IsPlayerTarget ? Brushes.OrangeRed : Brushes.Gold;
@@ -1119,6 +1415,7 @@ namespace Peace_of_Tanks
 
         private void CloseNetworkConnection()
         {
+            StopNetworkVoice();
             if (networkClient != null)
             {
                 networkClient.LineReceived -= NetworkClient_LineReceived;
@@ -1127,6 +1424,35 @@ namespace Peace_of_Tanks
                 networkClient = null;
             }
             UpdateNetworkUiVisibility();
+        }
+
+        private static string EncodeProtocolPart(string value)
+        {
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+        }
+
+        private static string DecodeProtocolPart(string value)
+        {
+            try
+            {
+                return Encoding.UTF8.GetString(Convert.FromBase64String(value ?? string.Empty));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static byte[] DecodeProtocolBytes(string value)
+        {
+            try
+            {
+                return Convert.FromBase64String(value ?? string.Empty);
+            }
+            catch
+            {
+                return Array.Empty<byte>();
+            }
         }
     }
 }

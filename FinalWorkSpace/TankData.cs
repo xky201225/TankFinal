@@ -299,7 +299,7 @@ namespace Peace_of_Tanks
         public void UnlockNextStage(int completedStageId)
         {
             HighestUnlockedStage = Math.Max(HighestUnlockedStage, completedStageId + 1);
-            HighestUnlockedStage = Math.Min(3, HighestUnlockedStage);
+            HighestUnlockedStage = Math.Min(BattleMapFactory.StageMapCount, HighestUnlockedStage);
         }
 
         public bool UpgradeTank(TankType type, TankUpgradeType upgradeType)
@@ -578,6 +578,7 @@ namespace Peace_of_Tanks
                         if (TryUseLocalDatabaseFallback(request.UserName, out fallbackPlayer))
                         {
                             currentAuthToken = string.Empty;
+                            AuthDialog.SaveLastUserName(fallbackPlayer.UserName);
                             return fallbackPlayer;
                         }
 
@@ -594,6 +595,7 @@ namespace Peace_of_Tanks
                     if (TryUseLocalDatabaseFallback(request.UserName, out fallbackPlayer))
                     {
                         currentAuthToken = string.Empty;
+                        AuthDialog.SaveLastUserName(fallbackPlayer.UserName);
                         return fallbackPlayer;
                     }
 
@@ -602,7 +604,9 @@ namespace Peace_of_Tanks
                 }
 
                 currentAuthToken = authToken;
-                return MapPayloadToPlayerData(payload, 0);
+                PlayerData playerData = MapPayloadToPlayerData(payload, 0);
+                AuthDialog.SaveLastUserName(playerData.UserName);
+                return playerData;
             }
         }
         private static void StartSyncTimer()
@@ -673,7 +677,7 @@ namespace Peace_of_Tanks
             playerData.UserName = payload.UserName ?? string.Empty;
             playerData.TotalExp = payload.TotalExp;
             playerData.SelectedTank = ParseTankType(payload.SelectedTank);
-            playerData.HighestUnlockedStage = Math.Max(1, Math.Min(3, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage));
+            playerData.HighestUnlockedStage = Math.Max(1, Math.Min(BattleMapFactory.StageMapCount, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage));
             playerData.StageRecords = new List<StageRecord>();
             foreach (StageRecordPayload record in payload.StageRecords ?? new List<StageRecordPayload>())
             {
@@ -780,7 +784,7 @@ ORDER BY ISNULL(LastLoginAt, UpdatedAt) DESC, Id DESC", connection))
                                 UserName = reader.IsDBNull(1) ? ("\u73a9\u5bb6" + Environment.UserName) : reader.GetString(1),
                                 TotalExp = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
                                 SelectedTank = reader.IsDBNull(3) ? TankType.Green : ParseTankType(reader.GetInt32(3)),
-                                HighestUnlockedStage = reader.IsDBNull(4) ? 1 : Math.Max(1, Math.Min(3, reader.GetInt32(4)))
+                                HighestUnlockedStage = reader.IsDBNull(4) ? 1 : Math.Max(1, Math.Min(BattleMapFactory.StageMapCount, reader.GetInt32(4)))
                             };
                         }
                     }
@@ -919,7 +923,7 @@ SELECT TOP 1 Id FROM Users WHERE UserName = @UserName;", connection))
                 command.Parameters.Add("@PasswordHash", SqlDbType.NVarChar, 255).Value = "LOCAL_FALLBACK_ONLY";
                 command.Parameters.Add("@TotalExp", SqlDbType.Int).Value = playerData.TotalExp;
                 command.Parameters.Add("@SelectedTank", SqlDbType.Int).Value = (int)playerData.SelectedTank;
-                command.Parameters.Add("@HighestUnlockedStage", SqlDbType.Int).Value = Math.Max(1, Math.Min(3, playerData.HighestUnlockedStage));
+                command.Parameters.Add("@HighestUnlockedStage", SqlDbType.Int).Value = Math.Max(1, Math.Min(BattleMapFactory.StageMapCount, playerData.HighestUnlockedStage));
                 return Convert.ToInt32(command.ExecuteScalar());
             }
         }

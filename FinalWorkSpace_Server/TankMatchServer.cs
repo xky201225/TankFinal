@@ -16,6 +16,7 @@ namespace Peace_of_Tanks_Server
 {
     internal sealed class TankMatchServer
     {
+        private const int StageMapCount = 6;
         private readonly TcpListener listener;
         private readonly object syncRoot = new object();
         private readonly Dictionary<string, ClientSession> waitingRooms = new Dictionary<string, ClientSession>(StringComparer.OrdinalIgnoreCase);
@@ -141,6 +142,14 @@ namespace Peace_of_Tanks_Server
             }
 
             if (line.StartsWith("STATE|", StringComparison.Ordinal) && session.Role == SessionRole.Host)
+            {
+                session.Peer.Send(line);
+                return;
+            }
+
+            if (line.StartsWith("MATCH_CHAT|", StringComparison.Ordinal)
+                || line.StartsWith("VOICE|", StringComparison.Ordinal)
+                || line.StartsWith("VOICE_STATE|", StringComparison.Ordinal))
             {
                 session.Peer.Send(line);
                 return;
@@ -467,7 +476,7 @@ namespace Peace_of_Tanks_Server
                 UserName = user.UserName,
                 TotalExp = user.TotalExp,
                 SelectedTank = user.SelectedTank,
-                HighestUnlockedStage = Math.Max(1, Math.Min(3, user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage))
+                HighestUnlockedStage = Math.Max(1, Math.Min(StageMapCount, user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage))
             };
 
             foreach (BattleRecord record in db.BattleRecords.Where(r => r.UserId == user.Id).ToList())
@@ -523,7 +532,7 @@ namespace Peace_of_Tanks_Server
         {
             user.TotalExp = payload.TotalExp;
             user.SelectedTank = payload.SelectedTank;
-            user.HighestUnlockedStage = Math.Max(user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage, Math.Max(1, Math.Min(3, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage)));
+            user.HighestUnlockedStage = Math.Max(user.HighestUnlockedStage <= 0 ? 1 : user.HighestUnlockedStage, Math.Max(1, Math.Min(StageMapCount, payload.HighestUnlockedStage <= 0 ? 1 : payload.HighestUnlockedStage)));
             user.UpdatedAt = DateTime.UtcNow;
             db.SaveChanges();
 
@@ -555,7 +564,7 @@ namespace Peace_of_Tanks_Server
 
             foreach (StageRecordPayload stagePayload in payload.StageRecords ?? new List<StageRecordPayload>())
             {
-                if (stagePayload.StageId < 1 || stagePayload.StageId > 3)
+                if (stagePayload.StageId < 1 || stagePayload.StageId > StageMapCount)
                 {
                     continue;
                 }

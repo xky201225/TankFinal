@@ -6,6 +6,7 @@ namespace Peace_of_Tanks
     internal static class BattleMapFactory
     {
         public const int SystemMapCount = 6;
+        public const int StageMapCount = 6;
         public const int GridWidth = 32;
         public const int GridHeight = 32;
         public const int TileSize = 25;
@@ -22,6 +23,9 @@ namespace Peace_of_Tanks
                 case 1: return "废墟前线";
                 case 2: return "钢铁水坝";
                 case 3: return "要塞核心";
+                case 4: return "林地迷洲";
+                case 5: return "烈火峡口";
+                case 6: return "终极地堡";
                 default: return "废墟前线";
             }
         }
@@ -51,6 +55,45 @@ namespace Peace_of_Tanks
                     AddRect(map, MapTileType.Wall, 10, 14, 12, 4);
                     AddRect(map, MapTileType.Grass, 7, 11, 3, 10);
                     AddRect(map, MapTileType.Grass, 22, 11, 3, 10);
+                    AddRect(map, MapTileType.Base, 15, 15, 2, 2);
+                    break;
+                case 4:
+                    AddRect(map, MapTileType.Grass, 2, 3, 8, 7);
+                    AddRect(map, MapTileType.Grass, 22, 3, 8, 7);
+                    AddRect(map, MapTileType.Grass, 2, 22, 8, 7);
+                    AddRect(map, MapTileType.Grass, 22, 22, 8, 7);
+                    AddRect(map, MapTileType.Water, 13, 3, 6, 8);
+                    AddRect(map, MapTileType.Water, 13, 21, 6, 8);
+                    AddRect(map, MapTileType.Wall, 7, 13, 18, 2);
+                    AddRect(map, MapTileType.Wall, 7, 17, 18, 2);
+                    AddRect(map, MapTileType.Iron, 14, 14, 4, 4);
+                    break;
+                case 5:
+                    AddRect(map, MapTileType.Wall, 3, 3, 26, 1);
+                    AddRect(map, MapTileType.Wall, 3, 28, 26, 1);
+                    AddRect(map, MapTileType.Wall, 3, 3, 1, 26);
+                    AddRect(map, MapTileType.Wall, 28, 3, 1, 26);
+                    AddRect(map, MapTileType.Water, 6, 6, 5, 5);
+                    AddRect(map, MapTileType.Water, 21, 21, 5, 5);
+                    AddRect(map, MapTileType.Iron, 13, 7, 2, 18);
+                    AddRect(map, MapTileType.Iron, 17, 7, 2, 18);
+                    AddRect(map, MapTileType.Grass, 7, 16, 6, 6);
+                    AddRect(map, MapTileType.Grass, 19, 10, 6, 6);
+                    AddRect(map, MapTileType.Base, 15, 15, 2, 2);
+                    break;
+                case 6:
+                    AddRect(map, MapTileType.Iron, 5, 5, 22, 1);
+                    AddRect(map, MapTileType.Iron, 5, 26, 22, 1);
+                    AddRect(map, MapTileType.Iron, 5, 5, 1, 22);
+                    AddRect(map, MapTileType.Iron, 26, 5, 1, 22);
+                    AddRect(map, MapTileType.Wall, 9, 9, 14, 2);
+                    AddRect(map, MapTileType.Wall, 9, 21, 14, 2);
+                    AddRect(map, MapTileType.Wall, 9, 11, 2, 10);
+                    AddRect(map, MapTileType.Wall, 21, 11, 2, 10);
+                    AddRect(map, MapTileType.Water, 13, 13, 6, 2);
+                    AddRect(map, MapTileType.Water, 13, 18, 6, 2);
+                    AddRect(map, MapTileType.Grass, 3, 13, 5, 6);
+                    AddRect(map, MapTileType.Grass, 24, 13, 5, 6);
                     AddRect(map, MapTileType.Base, 15, 15, 2, 2);
                     break;
                 default:
