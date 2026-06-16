@@ -150,7 +150,14 @@ namespace Peace_of_Tanks
 
         private Point GetNetworkChatPanelLocation()
         {
-            return new Point(18, networkStatusLabel != null && networkStatusLabel.Visible ? 70 : 18);
+            int panelHeight = networkChatPanel != null ? networkChatPanel.Height : 104;
+            int y = Math.Max(96, (ClientSize.Height - panelHeight) / 2);
+            if (networkStatusLabel != null && networkStatusLabel.Visible)
+            {
+                y = Math.Max(y, networkStatusLabel.Bottom + 12);
+            }
+
+            return new Point(18, y);
         }
 
         private void UpdateNetworkUiVisibility()
@@ -1368,9 +1375,9 @@ namespace Peace_of_Tanks
                 extra += "  |  Shots " + player.BarrageShotsRemaining;
             }
 
-            float panelWidth = Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
+            float panelWidth = GetPlayerHudPanelWidth();
             float panelHeight = 78f;
-            float x = rightSide ? ClientSize.Width - panelWidth - 18f : 18f;
+            float x = GetPlayerHudPanelX(rightSide, panelWidth);
             DrawSkillPanel(x, GetSkillPanelY(), panelWidth, panelHeight, title, state, extra, brush, player.Active);
         }
 

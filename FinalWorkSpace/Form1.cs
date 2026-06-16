@@ -988,9 +988,9 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            float width = 220f;
+            float width = GetPlayerHudPanelWidth();
             float height = 18f;
-            float x = ClientSize.Width - width - 18f;
+            float x = GetPlayerHudPanelX(rightSide, width);
             float y = GetPlayerHealthBarY(rightSide);
             float ratio = player.maxHitpoints <= 0 ? 0f : Math.Max(0f, Math.Min(1f, player.hitpoints / (float)player.maxHitpoints));
             using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(180, 28, 32, 38)))
@@ -1008,7 +1008,7 @@ namespace Peace_of_Tanks
 
         private float GetPlayerHealthBarY(bool rightSide)
         {
-            return GetSkillPanelY() - (rightSide ? 54f : 28f);
+            return GetSkillPanelY() - 42f;
         }
 
         private void DrawWorldHealthBar(int x, int y, int width, int current, int max, Color fillColor)
@@ -1150,11 +1150,21 @@ namespace Peace_of_Tanks
                 extra += "  |  齐射 " + player.BarrageShotsRemaining;
             }
 
-            float panelWidth = Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
+            float panelWidth = GetPlayerHudPanelWidth();
             float panelHeight = 78f;
-            float x = rightSide ? ClientSize.Width - panelWidth - 18f : 18f;
+            float x = GetPlayerHudPanelX(rightSide, panelWidth);
             float y = GetSkillPanelY();
             DrawSkillPanel(x, y, panelWidth, panelHeight, title, state, extra, brush, active);
+        }
+
+        private float GetPlayerHudPanelWidth()
+        {
+            return Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
+        }
+
+        private float GetPlayerHudPanelX(bool rightSide, float width)
+        {
+            return rightSide ? ClientSize.Width - width - 18f : 18f;
         }
 
         private float GetSkillPanelY()
@@ -2771,6 +2781,8 @@ namespace Peace_of_Tanks
                 ConfigureChineseLayout();
                 Invalidate();
             }
+
+            UpdateNetworkUiVisibility();
         }
 
         private void StartFromLaunchOptions()
