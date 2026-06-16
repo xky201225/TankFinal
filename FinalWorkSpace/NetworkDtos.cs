@@ -102,6 +102,7 @@ namespace Peace_of_Tanks
         public TankSnapshot Player2 = new TankSnapshot();
         public List<TankSnapshot> Enemies = new List<TankSnapshot>();
         public List<BulletSnapshot> Bullets = new List<BulletSnapshot>();
+        public bool IncludesBoxes = true;
         public List<BoxSnapshot> Boxes = new List<BoxSnapshot>();
         public List<AnimationSnapshot> Animations = new List<AnimationSnapshot>();
         public List<DamageTextSnapshot> DamageTexts = new List<DamageTextSnapshot>();

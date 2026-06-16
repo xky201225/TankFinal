@@ -228,15 +228,22 @@ namespace Peace_of_Tanks
 
         public void SendLine(string line)
         {
-            lock (sendLock)
+            try
             {
-                if (writer == null)
+                lock (sendLock)
                 {
-                    return;
-                }
+                    if (writer == null)
+                    {
+                        return;
+                    }
 
-                writer.WriteLine(line);
-                writer.Flush();
+                    writer.WriteLine(line);
+                    writer.Flush();
+                }
+            }
+            catch (Exception ex)
+            {
+                NotifyDisconnected(ex.Message);
             }
         }
 

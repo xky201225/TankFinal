@@ -18,17 +18,21 @@ namespace Peace_of_Tanks
         private TcpGameClient networkClient;
         private NetworkConfig activeNetworkConfig;
         private const int NetworkRenderIntervalMs = 16;
-        private const int NetworkSnapshotIntervalMs = 33;
+        private const int NetworkSnapshotIntervalMs = 16;
+        private const int NetworkBoxSnapshotIntervalMs = 500;
         private const int NetworkInputIntervalMs = 25;
         private readonly NetworkInputState remoteInputState = new NetworkInputState();
         private readonly NetworkInputState guestInputState = new NetworkInputState();
         private readonly HashSet<string> remoteExplosionSoundKeys = new HashSet<string>();
+        private readonly List<BoxSnapshot> remoteBoxSnapshots = new List<BoxSnapshot>();
         private NetworkVoiceChat networkVoiceChat;
         private readonly object snapshotLock = new object();
         private GameSnapshot latestSnapshot;
         private DateTime lastSnapshotBroadcastAtUtc = DateTime.MinValue;
+        private DateTime lastBoxSnapshotBroadcastAtUtc = DateTime.MinValue;
         private DateTime lastGuestInputSentAtUtc = DateTime.MinValue;
         private DateTime lastNetworkStatusUiUpdateAtUtc = DateTime.MinValue;
+        private int lastSnapshotBoxCount = -1;
         private string lastNetworkStatusText = string.Empty;
         private bool networkMode;
         private bool networkHost;
@@ -280,15 +284,7 @@ namespace Peace_of_Tanks
 
         private void CancelNetworkWaitingToLobby()
         {
-            suppressDisconnectMessage = true;
-            CloseNetworkConnection();
-            networkWaiting = false;
-            networkSessionStarted = false;
-            networkHost = false;
-            networkMode = false;
-            latestSnapshot = null;
-            returnToLobby = true;
-            Close();
+            ReturnToLobbyAfterNetworkStop();
         }
 
         private bool TryHandleNetworkGlobalKeyUp(KeyEventArgs e)
@@ -340,7 +336,10 @@ namespace Peace_of_Tanks
 
         private void BeginNetworkConnect(NetworkConfig config)
         {
-            BeginNetworkConnect(config, false);
+            if (!BeginNetworkConnect(config, false))
+            {
+                ReturnToLobbyAfterNetworkStop();
+            }
         }
 
         private bool BeginNetworkConnect(NetworkConfig config, bool allowRetry)
@@ -424,8 +423,7 @@ namespace Peace_of_Tanks
             {
                 string roomId = line.Substring("ROOM_NOT_FOUND|".Length);
                 MessageBox.Show(this, "没有找到房间：" + roomId, "加入房间", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ResetToMainMenuFromNetwork(false);
-                Close();
+                ReturnToLobbyAfterNetworkStop();
                 return;
             }
 
@@ -433,8 +431,7 @@ namespace Peace_of_Tanks
             {
                 string roomId = line.Substring("ROOM_EXISTS|".Length);
                 MessageBox.Show(this, "房间号已存在：" + roomId, "创建房间", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ResetToMainMenuFromNetwork(false);
-                Close();
+                ReturnToLobbyAfterNetworkStop();
                 return;
             }
 
@@ -546,6 +543,12 @@ namespace Peace_of_Tanks
                 latestSnapshot = snapshot;
             }
 
+            if (snapshot.IncludesBoxes)
+            {
+                remoteBoxSnapshots.Clear();
+                remoteBoxSnapshots.AddRange(snapshot.Boxes);
+            }
+
             string statusText = snapshot.StatusText ?? string.Empty;
             DateTime now = DateTime.UtcNow;
             if (statusText != lastNetworkStatusText || (now - lastNetworkStatusUiUpdateAtUtc).TotalMilliseconds >= 250)
@@ -586,15 +589,8 @@ namespace Peace_of_Tanks
 
             if (networkWaiting || networkSessionStarted || networkMode)
             {
-                if (networkSessionStarted)
-                {
-                    SettlePeerEliminated();
-                }
-                else
-                {
-                    MessageBox.Show(this, message, "网络连接", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    ResetToMainMenuFromNetwork(false);
-                }
+                MessageBox.Show(this, message, "网络连接", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ReturnToLobbyAfterNetworkStop();
             }
         }
 
@@ -1023,7 +1019,14 @@ namespace Peace_of_Tanks
             }
 
             lastSnapshotBroadcastAtUtc = now;
-            GameSnapshot snapshot = BuildSnapshot(gameOver);
+            bool includeBoxes = ShouldIncludeBoxesInSnapshot(now, gameOver, results);
+            GameSnapshot snapshot = BuildSnapshot(gameOver, includeBoxes);
+            if (includeBoxes)
+            {
+                lastBoxSnapshotBroadcastAtUtc = now;
+                lastSnapshotBoxCount = boxes.Count;
+            }
+
             if (results != null)
             {
                 snapshot.Results = results;
@@ -1032,7 +1035,15 @@ namespace Peace_of_Tanks
             networkClient.SendLine("STATE|" + payload);
         }
 
-        private GameSnapshot BuildSnapshot(bool gameOver)
+        private bool ShouldIncludeBoxesInSnapshot(DateTime now, bool gameOver, List<PlayerResultSnapshot> results)
+        {
+            return gameOver
+                || results != null
+                || boxes.Count != lastSnapshotBoxCount
+                || (now - lastBoxSnapshotBroadcastAtUtc).TotalMilliseconds >= NetworkBoxSnapshotIntervalMs;
+        }
+
+        private GameSnapshot BuildSnapshot(bool gameOver, bool includeBoxes)
         {
             GameSnapshot snapshot = new GameSnapshot
             {
@@ -1052,6 +1063,7 @@ namespace Peace_of_Tanks
                 StatusText = gameOver ? "主机端已结束本局游戏。" : GetBattleStatusText(),
                 BattleBannerText = battleBannerText ?? string.Empty
             };
+            snapshot.IncludesBoxes = includeBoxes;
 
             snapshot.Player1 = new TankSnapshot
             {
@@ -1107,14 +1119,17 @@ namespace Peace_of_Tanks
                 });
             }
 
-            for (int i = 0; i < boxes.Count; i++)
+            if (includeBoxes)
             {
-                snapshot.Boxes.Add(new BoxSnapshot
+                for (int i = 0; i < boxes.Count; i++)
                 {
-                    X = boxes[i].x,
-                    Y = boxes[i].y,
-                    Type = GetBoxType(boxes[i])
-                });
+                    snapshot.Boxes.Add(new BoxSnapshot
+                    {
+                        X = boxes[i].x,
+                        Y = boxes[i].y,
+                        Type = GetBoxType(boxes[i])
+                    });
+                }
             }
 
             for (int i = 0; i < animations.Count; i++)
@@ -1176,16 +1191,17 @@ namespace Peace_of_Tanks
 
             PlayRemoteSnapshotExplosionSounds(snapshot);
             DrawSnapshotHud(snapshot);
+            List<BoxSnapshot> boxesToDraw = snapshot.IncludesBoxes ? snapshot.Boxes : remoteBoxSnapshots;
 
             Rectangle battlefieldViewport = GetBattlefieldViewport();
             GraphicsState worldState = grMemory.Save();
             grMemory.TranslateTransform(battlefieldViewport.X, battlefieldViewport.Y);
 
-            for (int i = 0; i < snapshot.Boxes.Count; i++)
+            for (int i = 0; i < boxesToDraw.Count; i++)
             {
-                if (snapshot.Boxes[i].Type != 2)
+                if (boxesToDraw[i].Type != 2)
                 {
-                    grMemory.DrawImage(GetBoxImage(snapshot.Boxes[i].Type), snapshot.Boxes[i].X, snapshot.Boxes[i].Y, 25, 25);
+                    grMemory.DrawImage(GetBoxImage(boxesToDraw[i].Type), boxesToDraw[i].X, boxesToDraw[i].Y, 25, 25);
                 }
             }
 
@@ -1219,11 +1235,11 @@ namespace Peace_of_Tanks
                     snapshot.Player2.X, snapshot.Player2.Y, 50, 50, snapshot.Player2.RotationDegrees);
             }
 
-            for (int i = 0; i < snapshot.Boxes.Count; i++)
+            for (int i = 0; i < boxesToDraw.Count; i++)
             {
-                if (snapshot.Boxes[i].Type == 2)
+                if (boxesToDraw[i].Type == 2)
                 {
-                    grMemory.DrawImage(GetBoxImage(snapshot.Boxes[i].Type), snapshot.Boxes[i].X, snapshot.Boxes[i].Y, 25, 25);
+                    grMemory.DrawImage(GetBoxImage(boxesToDraw[i].Type), boxesToDraw[i].X, boxesToDraw[i].Y, 25, 25);
                 }
             }
 
@@ -1553,9 +1569,12 @@ namespace Peace_of_Tanks
             remoteInputState.AimAngleDegrees = 0f;
             guestInputState.AimAngleDegrees = 0f;
             remoteExplosionSoundKeys.Clear();
+            remoteBoxSnapshots.Clear();
             lastSnapshotBroadcastAtUtc = DateTime.MinValue;
+            lastBoxSnapshotBroadcastAtUtc = DateTime.MinValue;
             lastGuestInputSentAtUtc = DateTime.MinValue;
             lastNetworkStatusUiUpdateAtUtc = DateTime.MinValue;
+            lastSnapshotBoxCount = -1;
             lastNetworkStatusText = string.Empty;
 
             RefreshBattleBackground();
@@ -1584,6 +1603,29 @@ namespace Peace_of_Tanks
             }
 
             MenuWorking();
+        }
+
+        private void ReturnToLobbyAfterNetworkStop()
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            timer1.Enabled = false;
+            TimerPause.Enabled = false;
+            networkWaiting = false;
+            networkSessionStarted = false;
+            networkHost = false;
+            networkMode = false;
+            latestSnapshot = null;
+            returnToLobby = true;
+
+            suppressDisconnectMessage = true;
+            CloseNetworkConnection();
+            suppressDisconnectMessage = false;
+
+            Close();
         }
 
         private void CloseNetworkConnection()
