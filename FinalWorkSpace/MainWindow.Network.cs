@@ -151,9 +151,8 @@ namespace Peace_of_Tanks
         private Point GetNetworkChatPanelLocation()
         {
             int panelWidth = networkChatPanel != null ? networkChatPanel.Width : 330;
-            int panelHeight = networkChatPanel != null ? networkChatPanel.Height : 104;
-            int x = Math.Max(18, (ClientSize.Width - panelWidth) / 2);
-            int y = Math.Max(96, (int)Math.Round(GetSkillPanelY() - panelHeight - 18));
+            int x = Math.Max(0, ClientSize.Width - panelWidth);
+            int y = 0;
             if (networkStatusLabel != null && networkStatusLabel.Visible)
             {
                 y = Math.Max(y, networkStatusLabel.Bottom + 12);
