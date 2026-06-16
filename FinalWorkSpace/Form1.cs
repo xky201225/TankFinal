@@ -364,13 +364,7 @@ namespace Peace_of_Tanks
 
             if (IsNetworkGuest)
             {
-                float aimAngle = CalculateAimAngle(ToBattlefieldPoint(e.Location), guestInputState.Up || guestInputState.Down || guestInputState.Left || guestInputState.Right ? player1 : null);
-                if (Math.Abs(guestInputState.AimAngleDegrees - aimAngle) > 0.1f)
-                {
-                    guestInputState.AimAngleDegrees = aimAngle;
-                    SendGuestInputState();
-                }
-
+                UpdateGuestAimFromMouse(true);
                 return;
             }
 
@@ -392,6 +386,7 @@ namespace Peace_of_Tanks
                 if (guestInputState.Fire != pressed)
                 {
                     guestInputState.Fire = pressed;
+                    UpdateGuestAimFromMouse(false);
                     SendGuestInputState();
                 }
                 return;
@@ -448,6 +443,20 @@ namespace Peace_of_Tanks
             if (Math.Abs(dx) < float.Epsilon && Math.Abs(dy) < float.Epsilon)
             {
                 return tank.RotationDegrees;
+            }
+
+            return (float)((Math.Atan2(dy, dx) * 180.0 / Math.PI + 90.0 + 360.0) % 360.0);
+        }
+
+        private static float CalculateAimAngle(Point mousePosition, int tankX, int tankY, float fallbackRotationDegrees)
+        {
+            float centerX = tankX + 25f;
+            float centerY = tankY + 25f;
+            float dx = mousePosition.X - centerX;
+            float dy = mousePosition.Y - centerY;
+            if (Math.Abs(dx) < float.Epsilon && Math.Abs(dy) < float.Epsilon)
+            {
+                return fallbackRotationDegrees;
             }
 
             return (float)((Math.Atan2(dy, dx) * 180.0 / Math.PI + 90.0 + 360.0) % 360.0);
@@ -2247,6 +2256,7 @@ namespace Peace_of_Tanks
         {
             if (IsNetworkGuest)
             {
+                UpdateGuestAimFromMouse(true);
                 RenderRemoteSnapshotFrame();
                 return;
             }

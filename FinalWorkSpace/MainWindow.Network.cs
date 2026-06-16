@@ -17,11 +17,19 @@ namespace Peace_of_Tanks
         private Label networkVoiceLabel;
         private TcpGameClient networkClient;
         private NetworkConfig activeNetworkConfig;
+        private const int NetworkRenderIntervalMs = 16;
+        private const int NetworkSnapshotIntervalMs = 33;
+        private const int NetworkInputIntervalMs = 25;
         private readonly NetworkInputState remoteInputState = new NetworkInputState();
         private readonly NetworkInputState guestInputState = new NetworkInputState();
+        private readonly HashSet<string> remoteExplosionSoundKeys = new HashSet<string>();
         private NetworkVoiceChat networkVoiceChat;
         private readonly object snapshotLock = new object();
         private GameSnapshot latestSnapshot;
+        private DateTime lastSnapshotBroadcastAtUtc = DateTime.MinValue;
+        private DateTime lastGuestInputSentAtUtc = DateTime.MinValue;
+        private DateTime lastNetworkStatusUiUpdateAtUtc = DateTime.MinValue;
+        private string lastNetworkStatusText = string.Empty;
         private bool networkMode;
         private bool networkHost;
         private bool networkWaiting;
@@ -369,6 +377,24 @@ namespace Peace_of_Tanks
 
             if (InvokeRequired)
             {
+                if (line.StartsWith("STATE|", StringComparison.Ordinal) && IsNetworkGuest)
+                {
+                    GameSnapshot snapshot;
+                    if (!TryDeserializeSnapshotLine(line, out snapshot))
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        BeginInvoke(new Action<GameSnapshot>(ApplyNetworkSnapshot), snapshot);
+                    }
+                    catch
+                    {
+                    }
+                    return;
+                }
+
                 try
                 {
                     BeginInvoke(new Action<string>(NetworkClient_LineReceived), line);
@@ -468,14 +494,11 @@ namespace Peace_of_Tanks
 
             if (line.StartsWith("STATE|", StringComparison.Ordinal) && IsNetworkGuest)
             {
-                string payload = line.Substring("STATE|".Length);
-                GameSnapshot snapshot = NetworkSerialization.DeserializeFromBase64<GameSnapshot>(payload);
-                lock (snapshotLock)
+                GameSnapshot snapshot;
+                if (TryDeserializeSnapshotLine(line, out snapshot))
                 {
-                    latestSnapshot = snapshot;
+                    ApplyNetworkSnapshot(snapshot);
                 }
-                networkStatusLabel.Text = snapshot.StatusText;
-                UpdateNetworkUiVisibility();
                 return;
             }
 
@@ -493,6 +516,46 @@ namespace Peace_of_Tanks
             {
                 SettlePeerEliminated();
                 return;
+            }
+        }
+
+        private bool TryDeserializeSnapshotLine(string line, out GameSnapshot snapshot)
+        {
+            snapshot = null;
+            try
+            {
+                string payload = line.Substring("STATE|".Length);
+                snapshot = NetworkSerialization.DeserializeFromBase64<GameSnapshot>(payload);
+                return snapshot != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void ApplyNetworkSnapshot(GameSnapshot snapshot)
+        {
+            if (snapshot == null || IsDisposed)
+            {
+                return;
+            }
+
+            lock (snapshotLock)
+            {
+                latestSnapshot = snapshot;
+            }
+
+            string statusText = snapshot.StatusText ?? string.Empty;
+            DateTime now = DateTime.UtcNow;
+            if (statusText != lastNetworkStatusText || (now - lastNetworkStatusUiUpdateAtUtc).TotalMilliseconds >= 250)
+            {
+                lastNetworkStatusText = statusText;
+                lastNetworkStatusUiUpdateAtUtc = now;
+                if (networkStatusLabel != null && networkStatusLabel.Text != statusText)
+                {
+                    networkStatusLabel.Text = statusText;
+                }
             }
         }
 
@@ -594,7 +657,7 @@ namespace Peace_of_Tanks
                     ? "联机协作已匹配成功：目标是清空波次并击败最终Boss。你是副机端，等待主机同步战场状态..."
                     : "联机竞技已匹配成功：先达成10次击杀即可获胜。你是副机端，等待主机同步对战状态...";
                 modeMenu = 8;
-                timer1.Interval = GameTiming.TimerIntervalMs;
+                timer1.Interval = NetworkRenderIntervalMs;
                 timer1.Enabled = true;
                 RefreshBattleBackground();
                 grMain.DrawImage(backgroundMemory, 0, 0);
@@ -667,6 +730,7 @@ namespace Peace_of_Tanks
             {
                 if (ApplyKeyToInput(key, pressed, guestInputState))
                 {
+                    UpdateGuestAimFromMouse(false);
                     SendGuestInputState();
                     return true;
                 }
@@ -747,13 +811,81 @@ namespace Peace_of_Tanks
 
         private void SendGuestInputState()
         {
+            SendGuestInputState(true);
+        }
+
+        private void SendGuestInputState(bool force)
+        {
             if (networkClient == null || !networkClient.IsConnected)
             {
                 return;
             }
 
+            DateTime now = DateTime.UtcNow;
+            if (!force && (now - lastGuestInputSentAtUtc).TotalMilliseconds < NetworkInputIntervalMs)
+            {
+                return;
+            }
+
+            lastGuestInputSentAtUtc = now;
             string payload = NetworkSerialization.SerializeToBase64(guestInputState);
             networkClient.SendLine("INPUT|" + payload);
+        }
+
+        private void UpdateGuestAimFromMouse(bool sendWhenChanged)
+        {
+            if (!IsNetworkGuest || modeMenu < 3)
+            {
+                return;
+            }
+
+            int tankX;
+            int tankY;
+            float fallbackRotation;
+            if (!TryGetGuestControlledTankAimReference(out tankX, out tankY, out fallbackRotation))
+            {
+                return;
+            }
+
+            Point mousePoint = ToBattlefieldPoint(PointToClient(MousePosition));
+            float aimAngle = CalculateAimAngle(mousePoint, tankX, tankY, fallbackRotation);
+            if (Math.Abs(guestInputState.AimAngleDegrees - aimAngle) <= 0.1f)
+            {
+                return;
+            }
+
+            guestInputState.AimAngleDegrees = aimAngle;
+            if (sendWhenChanged)
+            {
+                SendGuestInputState(false);
+            }
+        }
+
+        private bool TryGetGuestControlledTankAimReference(out int tankX, out int tankY, out float fallbackRotation)
+        {
+            lock (snapshotLock)
+            {
+                if (latestSnapshot != null && latestSnapshot.Player2.Active)
+                {
+                    tankX = latestSnapshot.Player2.X;
+                    tankY = latestSnapshot.Player2.Y;
+                    fallbackRotation = latestSnapshot.Player2.RotationDegrees;
+                    return true;
+                }
+            }
+
+            if (player2 != null)
+            {
+                tankX = player2.x;
+                tankY = player2.y;
+                fallbackRotation = player2.RotationDegrees;
+                return true;
+            }
+
+            tankX = 0;
+            tankY = 0;
+            fallbackRotation = 0f;
+            return false;
         }
 
         private void StartNetworkVoice()
@@ -884,6 +1016,13 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            DateTime now = DateTime.UtcNow;
+            if (!gameOver && results == null && (now - lastSnapshotBroadcastAtUtc).TotalMilliseconds < NetworkSnapshotIntervalMs)
+            {
+                return;
+            }
+
+            lastSnapshotBroadcastAtUtc = now;
             GameSnapshot snapshot = BuildSnapshot(gameOver);
             if (results != null)
             {
@@ -1035,6 +1174,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
+            PlayRemoteSnapshotExplosionSounds(snapshot);
             DrawSnapshotHud(snapshot);
 
             Rectangle battlefieldViewport = GetBattlefieldViewport();
@@ -1235,6 +1375,32 @@ namespace Peace_of_Tanks
             }
         }
 
+        private void PlayRemoteSnapshotExplosionSounds(GameSnapshot snapshot)
+        {
+            HashSet<string> currentExplosionKeys = new HashSet<string>();
+            for (int i = 0; i < snapshot.Animations.Count; i++)
+            {
+                AnimationSnapshot animation = snapshot.Animations[i];
+                if (animation.Type == 0)
+                {
+                    continue;
+                }
+
+                string key = animation.Type + ":" + animation.X + ":" + animation.Y;
+                currentExplosionKeys.Add(key);
+                if (!remoteExplosionSoundKeys.Contains(key))
+                {
+                    TankAudio.PlayTankDestroyed();
+                }
+            }
+
+            remoteExplosionSoundKeys.Clear();
+            foreach (string key in currentExplosionKeys)
+            {
+                remoteExplosionSoundKeys.Add(key);
+            }
+        }
+
         private void DrawTankGlow(int x, int y, Color color)
         {
             BaseTank.DrawGlow(grMemory, x, y, 50, 50, color);
@@ -1384,6 +1550,13 @@ namespace Peace_of_Tanks
             player2.ResetSkillState();
             remoteInputState.Up = remoteInputState.Down = remoteInputState.Left = remoteInputState.Right = remoteInputState.Fire = remoteInputState.Skill = false;
             guestInputState.Up = guestInputState.Down = guestInputState.Left = guestInputState.Right = guestInputState.Fire = guestInputState.Skill = false;
+            remoteInputState.AimAngleDegrees = 0f;
+            guestInputState.AimAngleDegrees = 0f;
+            remoteExplosionSoundKeys.Clear();
+            lastSnapshotBroadcastAtUtc = DateTime.MinValue;
+            lastGuestInputSentAtUtc = DateTime.MinValue;
+            lastNetworkStatusUiUpdateAtUtc = DateTime.MinValue;
+            lastNetworkStatusText = string.Empty;
 
             RefreshBattleBackground();
             grMain.DrawImage(backgroundMemory, 0, 0);
