@@ -10,6 +10,7 @@ namespace Peace_of_Tanks
         private const double SpawnDistance = (TankSize + BulletSize) / 2.0;
         private static readonly double BaseSpeed = GameTiming.ScaleDistance(125);
         private const double CollisionStep = 5.0;
+        public const float VisualRotationOffsetDegrees = 180f;
         private static bool fallbackBulletTransparencyApplied;
         private readonly Bitmap pictureBullet;
         private double preciseX;
@@ -137,7 +138,7 @@ namespace Peace_of_Tanks
         {
             var state = grMemory.Save();
             grMemory.TranslateTransform(x + drawSize / 2f, y + drawSize / 2f);
-            grMemory.RotateTransform(rotationDegrees);
+            grMemory.RotateTransform(rotationDegrees + VisualRotationOffsetDegrees);
             grMemory.DrawImage(pictureBullet, -drawSize / 2f, -drawSize / 2f, drawSize, drawSize);
             grMemory.Restore(state);
         }

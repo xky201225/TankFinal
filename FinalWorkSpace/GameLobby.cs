@@ -100,6 +100,16 @@ namespace Peace_of_Tanks
             base.OnFormClosed(e);
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing && DialogResult != DialogResult.OK)
+            {
+                Application.Exit();
+            }
+
+            base.OnFormClosing(e);
+        }
+
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             Image bg = Peace_of_Tanks.Properties.Resources.back;

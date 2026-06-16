@@ -1209,7 +1209,7 @@ namespace Peace_of_Tanks
             {
                 int bulletSize = snapshot.Bullets[i].IsBoss ? 20 : 14;
                 DrawRotatedImage(grMemory, ResourceManager.Bullet ?? Peace_of_Tanks.Properties.Resources.PaoDan,
-                    snapshot.Bullets[i].X, snapshot.Bullets[i].Y, bulletSize, bulletSize, snapshot.Bullets[i].RotationDegrees);
+                    snapshot.Bullets[i].X, snapshot.Bullets[i].Y, bulletSize, bulletSize, snapshot.Bullets[i].RotationDegrees + Bullet.VisualRotationOffsetDegrees);
             }
 
             for (int i = 0; i < snapshot.Enemies.Count; i++)

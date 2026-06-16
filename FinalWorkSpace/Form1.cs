@@ -2668,6 +2668,16 @@ namespace Peace_of_Tanks
             base.OnFormClosed(e);
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing && !returnToLobby)
+            {
+                Application.Exit();
+            }
+
+            base.OnFormClosing(e);
+        }
+
         public MainWindow(GameLaunchOptions options)
         {
             InitializeComponent();
