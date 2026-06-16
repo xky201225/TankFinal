@@ -775,6 +775,7 @@ namespace Peace_of_Tanks
 
         private void AddExplosionEffect(int x, int y)
         {
+            TankAudio.PlayTankDestroyed();
             AddAnimation(x, y, 1, 5);
         }
 

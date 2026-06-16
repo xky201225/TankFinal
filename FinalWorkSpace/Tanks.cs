@@ -626,11 +626,13 @@ namespace Peace_of_Tanks
         private static readonly Random ranNumber = new Random();
 
         public EnemyEventArgs message;
+        private int avoidanceTurnDirection;
 
         public EnemyTank(Bitmap pictureTank1, Bitmap pictureTank2, Bitmap pictureBullet, int x, int y, int direction) : base(pictureTank1, pictureTank2, pictureBullet, x, y, direction)
         {
             EnableFreeRotation();
             message = new EnemyEventArgs();
+            avoidanceTurnDirection = ranNumber.Next(0, 2) == 0 ? -1 : 1;
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             message.goToPlayer = ranNumber.Next(1, 3);
@@ -642,6 +644,7 @@ namespace Peace_of_Tanks
         {
             EnableFreeRotation();
             message = new EnemyEventArgs();
+            avoidanceTurnDirection = ranNumber.Next(0, 2) == 0 ? -1 : 1;
             cooldownSeconds = EnemyFireIntervalSeconds;
             nextFireAvailableAtUtc = DateTime.UtcNow.AddSeconds(EnemyFireIntervalSeconds);
             message.goToPlayer = ranNumber.Next(1, 3);
@@ -761,11 +764,54 @@ namespace Peace_of_Tanks
             return true;
         }
 
+        private bool TryMoveVectorAvoidingObstacles(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, double moveX, double moveY, bool updateRotation)
+        {
+            if (TryMoveVector(mainWindow, boxes, tanks, moveX, moveY, updateRotation))
+            {
+                return true;
+            }
+
+            if (Math.Abs(moveX) < double.Epsilon && Math.Abs(moveY) < double.Epsilon)
+            {
+                return false;
+            }
+
+            int preferredDirection = avoidanceTurnDirection == 0 ? 1 : avoidanceTurnDirection;
+            int[] angleOffsets = { 35, 55, 80, 110, 145, 180 };
+            for (int i = 0; i < angleOffsets.Length; i++)
+            {
+                int offset = angleOffsets[i];
+                if (TryMoveRotatedVector(mainWindow, boxes, tanks, moveX, moveY, preferredDirection * offset, updateRotation))
+                {
+                    return true;
+                }
+
+                if (TryMoveRotatedVector(mainWindow, boxes, tanks, moveX, moveY, -preferredDirection * offset, updateRotation))
+                {
+                    avoidanceTurnDirection = -preferredDirection;
+                    return true;
+                }
+            }
+
+            avoidanceTurnDirection = -preferredDirection;
+            return false;
+        }
+
+        private bool TryMoveRotatedVector(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, double moveX, double moveY, double angleDegrees, bool updateRotation)
+        {
+            double radians = angleDegrees * Math.PI / 180.0;
+            double cos = Math.Cos(radians);
+            double sin = Math.Sin(radians);
+            double rotatedX = moveX * cos - moveY * sin;
+            double rotatedY = moveX * sin + moveY * cos;
+            return TryMoveVector(mainWindow, boxes, tanks, rotatedX, rotatedY, updateRotation);
+        }
+
         private bool TryMoveTowards(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, int targetX, int targetY)
         {
             double moveX = (targetX + 25) - (x + 25);
             double moveY = (targetY + 25) - (y + 25);
-            return TryMoveVector(mainWindow, boxes, tanks, moveX, moveY, false);
+            return TryMoveVectorAvoidingObstacles(mainWindow, boxes, tanks, moveX, moveY, false);
         }
 
         private bool TryStrafe(Form mainWindow, List<Box> boxes, List<BaseTank> tanks, int targetX, int targetY)
@@ -802,7 +848,7 @@ namespace Peace_of_Tanks
                 }
             }
 
-            return TryMoveVector(mainWindow, boxes, tanks, sideX, sideY, false);
+            return TryMoveVectorAvoidingObstacles(mainWindow, boxes, tanks, sideX, sideY, false);
         }
 
         private bool TryPatrol(Form mainWindow, List<Box> boxes, List<BaseTank> tanks)
@@ -820,12 +866,13 @@ namespace Peace_of_Tanks
             double radians = (message.patrolAngleDegrees - 90.0) * Math.PI / 180.0;
             double moveX = Math.Cos(radians);
             double moveY = Math.Sin(radians);
-            if (!TryMoveVector(mainWindow, boxes, tanks, moveX, moveY, true))
+            if (!TryMoveVectorAvoidingObstacles(mainWindow, boxes, tanks, moveX, moveY, true))
             {
                 message.patrolAngleDegrees += 120f;
                 return false;
             }
 
+            message.patrolAngleDegrees = RotationDegrees;
             return true;
         }
 
