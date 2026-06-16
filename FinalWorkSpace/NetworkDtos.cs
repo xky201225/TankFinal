@@ -29,6 +29,12 @@ namespace Peace_of_Tanks
         public bool Active;
         public int Kind;
         public int TankType;
+        public int SkillType;
+        public bool SkillReady;
+        public float RemainingSkillCooldownSeconds;
+        public bool OverdriveActive;
+        public bool LifestealActive;
+        public int BarrageShotsRemaining;
     }
 
     [Serializable]

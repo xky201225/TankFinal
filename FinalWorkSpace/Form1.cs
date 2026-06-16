@@ -991,7 +991,7 @@ namespace Peace_of_Tanks
             float width = 220f;
             float height = 18f;
             float x = ClientSize.Width - width - 18f;
-            float y = rightSide ? ClientSize.Height - 72f : ClientSize.Height - 36f;
+            float y = GetPlayerHealthBarY(rightSide);
             float ratio = player.maxHitpoints <= 0 ? 0f : Math.Max(0f, Math.Min(1f, player.hitpoints / (float)player.maxHitpoints));
             using (SolidBrush backBrush = new SolidBrush(Color.FromArgb(180, 28, 32, 38)))
             using (SolidBrush fillBrush = new SolidBrush(active ? (rightSide ? Color.FromArgb(90, 170, 255) : Color.FromArgb(70, 220, 120)) : Color.FromArgb(120, 120, 120)))
@@ -1004,6 +1004,11 @@ namespace Peace_of_Tanks
 
             string text = (rightSide ? "P2 " : "P1 ") + Math.Max(0, player.hitpoints) + "/" + Math.Max(1, player.maxHitpoints) + "  生命 " + Math.Max(0, lives);
             grMemory.DrawString(text, healthBarFont, Brushes.White, x, y - 18f);
+        }
+
+        private float GetPlayerHealthBarY(bool rightSide)
+        {
+            return GetSkillPanelY() - (rightSide ? 54f : 28f);
         }
 
         private void DrawWorldHealthBar(int x, int y, int width, int current, int max, Color fillColor)
@@ -1033,17 +1038,14 @@ namespace Peace_of_Tanks
                 DrawWorldHealthBar(enemies[i].x + barOffsetX, enemies[i].y - 10, barWidth, enemies[i].hitpoints, enemies[i].maxHitpoints, enemies[i].IsBossEntity ? Color.FromArgb(186, 72, 210) : Color.FromArgb(226, 86, 86));
             }
 
-            if (setting.twoPlayer || networkMode)
+            if (firstPlayer)
             {
-                if (firstPlayer)
-                {
-                    DrawWorldHealthBar(player1.x + 5, player1.y - 10, 40, player1.hitpoints, player1.maxHitpoints, Color.FromArgb(90, 220, 120));
-                }
+                DrawWorldHealthBar(player1.x + 5, player1.y - 10, 40, player1.hitpoints, player1.maxHitpoints, Color.FromArgb(90, 220, 120));
+            }
 
-                if (secondPlayer)
-                {
-                    DrawWorldHealthBar(player2.x + 5, player2.y - 10, 40, player2.hitpoints, player2.maxHitpoints, Color.FromArgb(90, 170, 255));
-                }
+            if ((setting.twoPlayer || networkMode) && secondPlayer)
+            {
+                DrawWorldHealthBar(player2.x + 5, player2.y - 10, 40, player2.hitpoints, player2.maxHitpoints, Color.FromArgb(90, 170, 255));
             }
         }
 
@@ -1151,8 +1153,13 @@ namespace Peace_of_Tanks
             float panelWidth = Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
             float panelHeight = 78f;
             float x = rightSide ? ClientSize.Width - panelWidth - 18f : 18f;
-            float y = ClientSize.Height - panelHeight - 22f;
+            float y = GetSkillPanelY();
             DrawSkillPanel(x, y, panelWidth, panelHeight, title, state, extra, brush, active);
+        }
+
+        private float GetSkillPanelY()
+        {
+            return ClientSize.Height - 100f;
         }
 
         private string GetBattleStatusText()
@@ -2754,7 +2761,7 @@ namespace Peace_of_Tanks
                 return;
             }
 
-            if (modeMenu == 3)
+            if (modeMenu == 3 || IsNetworkGuest)
             {
                 RefreshBattleBackground();
                 Invalidate();

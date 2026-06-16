@@ -1077,6 +1077,7 @@ namespace Peace_of_Tanks
                 Kind = 1,
                 TankType = (int)networkPlayer1TankType
             };
+            FillSkillSnapshot(snapshot.Player1, player1);
             snapshot.Player2 = new TankSnapshot
             {
                 X = player2.x,
@@ -1089,6 +1090,7 @@ namespace Peace_of_Tanks
                 Kind = 2,
                 TankType = (int)networkPlayer2TankType
             };
+            FillSkillSnapshot(snapshot.Player2, player2);
 
             for (int i = 0; i < enemies.Count; i++)
             {
@@ -1156,6 +1158,21 @@ namespace Peace_of_Tanks
             }
 
             return snapshot;
+        }
+
+        private void FillSkillSnapshot(TankSnapshot snapshot, PlayerTank player)
+        {
+            if (snapshot == null || player == null)
+            {
+                return;
+            }
+
+            snapshot.SkillType = (int)player.SkillType;
+            snapshot.SkillReady = player.IsSkillReady;
+            snapshot.RemainingSkillCooldownSeconds = (float)player.GetRemainingSkillCooldownSeconds();
+            snapshot.OverdriveActive = player.IsOverdriveActive;
+            snapshot.LifestealActive = player.IsLifestealActive;
+            snapshot.BarrageShotsRemaining = player.BarrageShotsRemaining;
         }
 
         private int GetBoxType(Box box)
@@ -1301,10 +1318,60 @@ namespace Peace_of_Tanks
             DrawNumber(snapshot.PointsPlayer2, hudNumberX, ClientSize.Height - 72);
             DrawKillHud(snapshot.KillsPlayer1, snapshot.KillsPlayer2);
             DrawSurvivalHud(snapshot.SurvivalWave, snapshot.WaveEnemiesLeft, snapshot.SurvivalBossWave, snapshot.SurvivalVictory);
+            DrawSnapshotSkillHud(snapshot.Player1, false);
+            DrawSnapshotSkillHud(snapshot.Player2, true);
             if (snapshot.BattleBannerTicks > 0 && !string.IsNullOrEmpty(snapshot.BattleBannerText))
             {
                 DrawBattleBanner(snapshot.BattleBannerText);
             }
+        }
+
+        private void DrawSnapshotSkillHud(TankSnapshot player, bool rightSide)
+        {
+            if (player == null)
+            {
+                return;
+            }
+
+            TankSkillType skillType = (TankSkillType)Math.Max(0, player.SkillType);
+            string title = TankSkillCatalog.GetDisplayName(skillType);
+            string state;
+            SolidBrush brush;
+
+            if (!player.Active)
+            {
+                state = "Inactive";
+                brush = skillCooldownBrush;
+            }
+            else if (player.SkillReady)
+            {
+                state = "CD Ready";
+                brush = skillReadyBrush;
+            }
+            else
+            {
+                state = "CD " + Math.Max(0f, player.RemainingSkillCooldownSeconds).ToString("0.0") + "s";
+                brush = skillCooldownBrush;
+            }
+
+            string extra = "Key E";
+            if (player.OverdriveActive)
+            {
+                extra += "  |  Overdrive";
+            }
+            else if (player.LifestealActive)
+            {
+                extra += "  |  Lifesteal";
+            }
+            else if (player.BarrageShotsRemaining > 0)
+            {
+                extra += "  |  Shots " + player.BarrageShotsRemaining;
+            }
+
+            float panelWidth = Math.Min(300f, Math.Max(220f, ClientSize.Width * 0.22f));
+            float panelHeight = 78f;
+            float x = rightSide ? ClientSize.Width - panelWidth - 18f : 18f;
+            DrawSkillPanel(x, GetSkillPanelY(), panelWidth, panelHeight, title, state, extra, brush, player.Active);
         }
 
         private void DrawSnapshotDamageTexts(GameSnapshot snapshot)
